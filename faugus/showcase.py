@@ -28,9 +28,9 @@ import gi
 
 gi.require_version("Gtk", "4.0")
 gi.require_version("Adw", "1")
-from gi.repository import Adw, Gdk, GLib, Gtk, Pango
+from gi.repository import Adw, Gdk, GLib, Graphene, Gtk, Pango
 
-from faugus.utils import HiDpiPaintable, add_css_once, new_picture, play_ui_sound
+from faugus.utils import HiDpiPaintable, add_css_once, new_icon_image, new_picture, play_ui_sound
 
 # `_` (gettext) is installed into builtins by launcher.py's setup_gettext().
 
@@ -110,6 +110,17 @@ button.showcase-round.showcase-small {
     min-width: 40px;
     min-height: 40px;
     border-radius: 20px;
+}
+entry.showcase-search {
+    border-radius: 20px;
+    border: none;
+    background: alpha(white, 0.16);
+    color: white;
+    padding: 0 14px;
+}
+entry.showcase-search:focus-within {
+    background: alpha(white, 0.24);
+    box-shadow: 0 0 0 2px alpha(@accent_bg_color, 0.9);
 }
 button.showcase-hint {
     border: none;
@@ -214,7 +225,10 @@ class Showcase:
         self.win.connect("notify::fullscreened", lambda *_: self._sync_fullscreen_button())
         self._sync_fullscreen_button()
 
-        top_end = Gtk.Box(spacing=18)
+        top_end = Gtk.Box(spacing=12)
+        top_end.append(self._build_toolbar())
+        self.clock.set_margin_start(10)
+        self.clock.set_margin_end(4)
         top_end.append(self.clock)
         top_end.append(self.fullscreen_button)
 
@@ -305,6 +319,18 @@ class Showcase:
         self.grid.set_activate_on_single_click(False)
         self.grid.connect("child-activated", self._on_tile_activated)
 
+        # Clicks live on the FlowBox itself (like Faugus' own grid): the FlowBox
+        # claims pointer presses, which would cancel gestures on its children.
+        click = Gtk.GestureClick()
+        click.set_button(Gdk.BUTTON_PRIMARY)
+        click.connect("released", self._on_grid_click)
+        self.grid.add_controller(click)
+
+        right = Gtk.GestureClick()
+        right.set_button(Gdk.BUTTON_SECONDARY)
+        right.connect("pressed", self._on_grid_right_click)
+        self.grid.add_controller(right)
+
         grid_keys = Gtk.EventControllerKey()
         grid_keys.connect("key-pressed", self._on_grid_key)
         self.grid.add_controller(grid_keys)
@@ -312,7 +338,73 @@ class Showcase:
 
         content.append(library)
 
+    def _build_toolbar(self):
+        """Console-style top-right controls replacing Faugus' bottom bar."""
+        win = self.win
+        bar = Gtk.Box(spacing=10)
+        bar.set_valign(Gtk.Align.CENTER)
+
+        # Search: an icon that slides open into Faugus' own search entry.
+        self.search_revealer = Gtk.Revealer()
+        self.search_revealer.set_transition_type(Gtk.RevealerTransitionType.SLIDE_LEFT)
+        self.search_revealer.set_transition_duration(250)
+        self.search_slot = Gtk.Box()
+        self.search_revealer.set_child(self.search_slot)
+        bar.append(self.search_revealer)
+
+        def tool(icon, tooltip, callback, themed=False):
+            button = Gtk.Button()
+            button.add_css_class("showcase-round")
+            button.add_css_class("showcase-small")
+            if themed:
+                button.set_icon_name(icon)
+            else:
+                button.set_child(new_icon_image(f"{icon}.svg"))
+            button.set_tooltip_text(tooltip)
+            button.connect("clicked", callback)
+            bar.append(button)
+            return button
+
+        self.search_button = tool("system-search-symbolic", _("Search (Ctrl+F)"),
+                                  lambda *_: self.toggle_search(), themed=True)
+        tool("faugus-add-symbolic", _("Add game"), lambda b: win.on_button_add_clicked(b))
+        tool("faugus-settings-symbolic", _("Settings"), lambda b: win.on_button_settings_clicked(b))
+        tool("faugus-kill-symbolic", _("Kill all running games"), lambda b: win.on_button_kill_clicked(b))
+        return bar
+
+    def _adopt_search_entry(self):
+        entry = getattr(self.win, "entry_search", None)
+        if entry is None or entry.get_parent() is self.search_slot:
+            return
+        parent = entry.get_parent()
+        if parent is not None:
+            parent.remove(entry)
+        entry.set_hexpand(False)
+        entry.set_size_request(260, 40)
+        entry.add_css_class("showcase-search")
+        self.search_slot.append(entry)
+
+    def toggle_search(self, open_=None):
+        entry = self.win.entry_search
+        if open_ is None:
+            open_ = not self.search_revealer.get_reveal_child()
+        if open_:
+            self.search_revealer.set_reveal_child(True)
+            GLib.idle_add(lambda: entry.grab_focus() and False)
+        else:
+            if entry.get_text():
+                self.win.leave_search()
+            self.search_revealer.set_reveal_child(False)
+            fixed = getattr(self.win, "carrousel_fixed", None)
+            if fixed is not None:
+                fixed.grab_focus()
+
     def attach_carrousel(self, carrousel_box):
+        self._adopt_search_entry()
+        wrapper = getattr(self.win, "bottom_bar_wrapper", None)
+        if wrapper is not None:
+            wrapper.set_visible(False)
+
         parent = carrousel_box.get_parent()
         if parent is not None and parent is not self.carrousel_slot:
             parent.remove(carrousel_box)
@@ -535,16 +627,6 @@ class Showcase:
         child.game = game
         child.set_tooltip_text(game.title)
 
-        click = Gtk.GestureClick()
-        click.set_button(Gdk.BUTTON_PRIMARY)
-        click.connect("released", lambda g, n, x, y, c=child: self._on_tile_click(c, n))
-        child.add_controller(click)
-
-        right = Gtk.GestureClick()
-        right.set_button(Gdk.BUTTON_SECONDARY)
-        right.connect("released", lambda g, n, x, y, c=child: self._on_tile_menu(c, x, y))
-        child.add_controller(right)
-
         if os.path.isfile(game.cover):
             key = win.cover_texture_key(game.cover, win.is_game_installed(game))
 
@@ -582,6 +664,20 @@ class Showcase:
             win.carrousel_index = target
             win.render_carrousel()
             play_ui_sound("navigate")
+
+    def _on_grid_click(self, _gesture, n_press, x, y):
+        child = self.grid.get_child_at_pos(int(x), int(y))
+        if child is not None and hasattr(child, "game"):
+            self._on_tile_click(child, n_press)
+
+    def _on_grid_right_click(self, gesture, _n_press, x, y):
+        child = self.grid.get_child_at_pos(int(x), int(y))
+        if child is None or not hasattr(child, "game"):
+            return
+        gesture.set_state(Gtk.EventSequenceState.CLAIMED)
+        ok, point = self.grid.compute_point(child, Graphene.Point().init(x, y))
+        cx, cy = (point.x, point.y) if ok else (0, 0)
+        self._on_tile_menu(child, cx, cy)
 
     def _on_tile_click(self, child, n_press):
         if n_press == 2:
@@ -683,10 +779,19 @@ class Showcase:
             _("Exit fullscreen (F11)") if is_full else _("Fullscreen (F11)")
         )
 
-    def _on_window_key(self, _controller, keyval, _keycode, _state):
+    def _on_window_key(self, _controller, keyval, _keycode, state):
         if keyval == Gdk.KEY_F11:
             self.toggle_fullscreen()
             return True
+        if keyval == Gdk.KEY_f and state & Gdk.ModifierType.CONTROL_MASK:
+            self.toggle_search(True)
+            return True
+        if keyval == Gdk.KEY_Escape and self.search_revealer.get_reveal_child():
+            focus = self.win.get_focus()
+            entry = self.win.entry_search
+            if focus is not None and (focus is entry or focus.is_ancestor(entry)):
+                self.toggle_search(False)
+                return True
         return False
 
     # ------------------------------------------------------------------ misc
