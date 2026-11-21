@@ -518,6 +518,12 @@ class Showcase:
 
         win.on_button_edit_clicked = on_button_edit_clicked
 
+        # "Download missing artwork" in Settings (Faugus X file, no official changes).
+        from faugus.artwork_refresh import install as install_artwork_refresh
+        settings_cls = type(win).on_button_edit_clicked.__globals__.get("Settings")
+        if settings_cls is not None:
+            install_artwork_refresh(settings_cls, lambda: list(win.games), self.on_artwork_refreshed)
+
         from faugus.launch_screen import LaunchScreen
         self.launch_screen = LaunchScreen(win)
         self._known_running = set(win.running)
@@ -686,6 +692,16 @@ class Showcase:
         self.logo.set_paintable(HiDpiPaintable(texture, w, h))
         self.logo.set_size_request(w, h)
         self.title_stack.set_visible_child_name("logo")
+
+    def on_artwork_refreshed(self):
+        """New banners/logos were downloaded: show them for the current game."""
+        game = self.win.selected()
+        if game is None:
+            return
+        self.backdrop._current_path = None
+        if not self.attracting:
+            self.backdrop.show_game(game)
+        self._fetch_logo(game, lambda texture, gid=game.gameid: self._on_logo_ready(gid, texture))
 
     def on_logo_edited(self, game):
         """The user changed a logo in the edit window: show it right away."""
