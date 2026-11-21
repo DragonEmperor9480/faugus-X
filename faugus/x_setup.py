@@ -85,6 +85,7 @@ def _watch_settings(app, win):
     def __init__(self, *args, **kwargs):
         original_init(self, *args, **kwargs)
         _add_controller_option(self)
+        _add_hero_buttons_option(self, win)
 
         def recheck(*_a):
             GLib.timeout_add(400, lambda: (require_steamgriddb(app, app.get_active_window() or win), False)[1])
@@ -95,6 +96,37 @@ def _watch_settings(app, win):
 
     settings_cls.__init__ = __init__
     settings_cls._faugus_x_gate = True
+
+
+def _add_hero_buttons_option(settings, win):
+    """Settings → Interface, under Interface Mode: show the Showcase Play / ⋯ buttons."""
+    from faugus import showcase
+    combo = getattr(settings, "combobox_interface", None)
+    grid = combo.get_parent() if combo is not None else None
+    if not isinstance(grid, Gtk.Grid):
+        return
+    check = Gtk.CheckButton(label=_("Show Play and menu buttons in Showcase"))
+    check.set_tooltip_text(_("Games can also be played from the carousel (double-click, Enter or Cross / A), "
+                             "and stopped or edited from its menu (right-click or Triangle / Y)."))
+    check.set_active(showcase.hero_buttons_enabled())
+    grid.attach(check, 0, 2, 1, 1)
+    settings.checkbox_hero_buttons = check
+    sync = lambda *_a: check.set_sensitive(combo.get_active_id() == "Showcase")
+    combo.connect("changed", sync)
+    sync()
+
+    def on_response(_dialog, response_id):
+        if response_id != Gtk.ResponseType.OK:
+            return
+        visible = check.get_active()
+        cfg = ConfigManager()
+        cfg.config[showcase.HERO_BUTTONS_KEY] = str(visible)
+        cfg.save_config()
+        live = getattr(win, "showcase", None)
+        if live is not None:
+            live.set_hero_buttons(visible)
+
+    settings.connect("response", on_response)
 
 
 def _add_controller_option(settings):

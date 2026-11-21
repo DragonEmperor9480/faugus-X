@@ -255,6 +255,14 @@ def _kwin_activate_own_window():
         print(f"Faugus X: could not raise the window through KWin: {error}", flush=True)
 
 
+HERO_BUTTONS_KEY = "showcase-hero-buttons"
+
+
+def hero_buttons_enabled():
+    from faugus.config_manager import ConfigManager
+    return ConfigManager().config.get(HERO_BUTTONS_KEY, "True") != "False"
+
+
 def _fixed_holder(picture):
     """Hold a picture at its exact size.
 
@@ -388,6 +396,7 @@ class Showcase:
 
         actions = Gtk.Box(spacing=14)
         actions.set_margin_top(12)
+        self.hero_actions = actions
         self.play_button = Gtk.Button()
         self.play_button.add_css_class("showcase-play")
         self.play_button.connect("clicked", self._on_play)
@@ -399,6 +408,7 @@ class Showcase:
         self.more_button.connect("clicked", self._on_more)
         actions.append(self.more_button)
         self.hero_info.append(actions)
+        self.set_hero_buttons(hero_buttons_enabled())
 
         self.hero_page.append(self.hero_info)
 
@@ -556,6 +566,10 @@ class Showcase:
             parent.remove(self.root)
 
         return self.root
+
+    def set_hero_buttons(self, visible):
+        """Show or hide the hero's Play and ⋯ buttons (the carousel does both anyway)."""
+        self.hero_actions.set_visible(visible)
 
     def _fit_hero(self):
         page = int(self.vadj.get_page_size())

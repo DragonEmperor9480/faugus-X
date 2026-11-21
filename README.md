@@ -14,7 +14,7 @@ Faugus X keeps everything Faugus does and adds **Showcase**, a full-screen inter
 A new **Showcase** interface mode, next to Faugus' List, Grid, Covers and Carrousel modes.
 
 - **Full-screen by default.** Toggle with the button in the top-right corner or **F11**.
-- **Hero area** for the selected game: its logo, playtime, last played, and big **Play** / **Stop** and **⋯** (game menu) buttons.
+- **Hero area** for the selected game: its logo, playtime, last played, and big **Play** / **Stop** and **⋯** (game menu) buttons. For a cleaner look, hide the buttons with **Settings → Interface → Show Play and menu buttons in Showcase**; the carousel does the same (double-click or Enter to play, right-click for Stop, Edit and the rest of the game menu).
 - **Carousel** of covers along the bottom, as in Faugus' Carrousel mode.
 - **Top bar** with search (**Ctrl+F**), add game, settings, kill, power and fullscreen buttons, plus a clock. The bottom bar is hidden.
 - **Your Library**: scroll down for a grid of every game. Click to select, double-click to play, right-click for the game menu.
@@ -120,8 +120,8 @@ python3 -m faugus.launcher
 | Action | Keyboard / mouse | Controller |
 |---|---|---|
 | Browse games | ← → ↑ ↓ or W A S D / scroll | D-pad / left stick |
-| Play | Enter / Play button | Cross / A |
-| Game menu | ⋯ button / right-click | Triangle / Y |
+| Play | Enter / Play button / double-click the cover | Cross / A |
+| Game menu (Stop, Edit…) | ⋯ button / right-click | Triangle / Y |
 | Search | Ctrl+F (Esc to close) | |
 | Fullscreen | F11 | |
 | Hide launch screen | Esc | Circle / B |
