@@ -40,6 +40,11 @@ DOCDIR="${ROOT}/share/licenses/faugus-x"
 if [ "$ACTION" = "uninstall" ]; then
 	rm -rf "$LIBDIR" "$DOCDIR"
 	rm -f "$BINDIR/faugus-x" "$APPDIR/$APP_ID.desktop" "$ICONDIR/$APP_ID.svg"
+	if [ -z "$DESTDIR" ]; then
+		# "Open when a controller connects" watcher.
+		rm -f "${XDG_CONFIG_HOME:-$HOME/.config}/autostart/faugus-x-controller.desktop"
+		pkill -f "faugus.controller_watch" 2>/dev/null || true
+	fi
 	echo "Faugus X removed from $ROOT."
 	echo "Your games, artwork and settings (~/.config/faugus-x) were kept."
 	exit 0

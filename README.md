@@ -46,6 +46,9 @@ After 45 seconds without input on the home screen, the interface fades away and 
 ### Download missing artwork
 **Settings → Interface**, under the SteamGridDB API key: **Download missing artwork** goes through every game and fills the gaps: banners, HD banners and logos. It never replaces artwork you already have or picked yourself.
 
+### Open when a controller connects
+**Settings → Miscellaneous → Open when a controller connects**: plug in or connect a controller, or press its **PS / Home** button after it was off or idle for a minute, and Faugus X opens (or comes to the front), like a console. Controllers with a USB wireless dongle only work with the Home button, since the dongle stays connected. It also works right after login, without Faugus X running. It never opens while a game started from Faugus is running, so a controller that reconnects mid-game won't interrupt you. Steam's virtual controller is ignored.
+
 ### Smooth on modest hardware
 Artwork is decoded in the background, the backdrop is drawn without per-frame restyling, and heavy work waits until carousel slides finish. Tested at 60 fps on Intel UHD 630 integrated graphics.
 
@@ -147,10 +150,11 @@ faugus/logo_editor.py      Logo slot and picker in the edit window
 faugus/artwork_refresh.py  "Download missing artwork"
 faugus/xbridge.py          launch status from the runner to the launch screen
 faugus/x_setup.py          first-run defaults and the SteamGridDB requirement
+faugus/controller_watch.py open Faugus X when a controller connects
 packaging/faugus-x/        installer and PKGBUILD
 ```
 
-Faugus' own files only have small, commented changes: the Showcase mode and two startup calls in `launcher.py`, a few lines in `runner.py` for the launch status, and the separate app ID and settings file in `path_manager.py` (plus one-line ID fixes in `tray_only.py`, `shortcut.py` and the autostart entry).
+Faugus' own files only have small, commented changes: the Showcase mode and two startup calls in `launcher.py`, a few lines in `runner.py` for the launch status, and the separate app ID and settings file in `path_manager.py` (plus one-line ID fixes in `tray_only.py`, `shortcut.py` and the autostart entry, and a `--controller-watch` line in the `faugus-launcher` script).
 
 ## Credits and license
 

@@ -36,6 +36,12 @@ def prepare_first_run():
     cfg.save_config()
 
 
+def start_background_services():
+    """Start the controller watcher if "Open when a controller connects" is on."""
+    from faugus import controller_watch
+    controller_watch.start()
+
+
 # ---------------------------------------------------------------- SteamGridDB gate
 
 def has_steamgriddb():
@@ -50,6 +56,7 @@ _gate = None
 def require_steamgriddb(app, win):
     """Show the SteamGridDB window if Faugus X can't work without it."""
     _watch_settings(app, win)
+    start_background_services()
     if has_steamgriddb() or _gate is not None or win is None:
         return
     _Gate(app, win)
@@ -66,6 +73,7 @@ def _watch_settings(app, win):
 
     def __init__(self, *args, **kwargs):
         original_init(self, *args, **kwargs)
+        _add_controller_option(self)
 
         def recheck(*_a):
             GLib.timeout_add(400, lambda: (require_steamgriddb(app, app.get_active_window() or win), False)[1])
@@ -76,6 +84,35 @@ def _watch_settings(app, win):
 
     settings_cls.__init__ = __init__
     settings_cls._faugus_x_gate = True
+
+
+def _add_controller_option(settings):
+    """Settings → Miscellaneous: "Open when a controller connects"."""
+    from faugus import controller_watch
+    anchor = getattr(settings, "checkbox_wow64", None)
+    grid = anchor.get_parent() if anchor is not None else None
+    if not isinstance(grid, Gtk.Grid):
+        return
+    check = Gtk.CheckButton(label=_("Open when a controller connects"))
+    check.set_tooltip_text(_("Opens Faugus X when a controller is plugged in or turned on, "
+                             "also at login. Never while a game is running."))
+    check.set_active(controller_watch.is_enabled())
+    grid.attach(check, 0, 12, 1, 1)
+    settings.checkbox_controller_open = check
+
+    def on_response(_dialog, response_id):
+        if response_id != Gtk.ResponseType.OK:
+            return
+        enabled = check.get_active()
+        if enabled == controller_watch.is_enabled():
+            return
+        cfg = ConfigManager()
+        cfg.config[controller_watch.CONFIG_KEY] = str(enabled)
+        cfg.save_config()
+        controller_watch.apply_setting(enabled)
+
+    # Connected here, so it runs before Faugus' own handler (which may restart the app).
+    settings.connect("response", on_response)
 
 
 def _check_key(key):
