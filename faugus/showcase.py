@@ -33,13 +33,15 @@ gi.require_version("Adw", "1")
 from gi.repository import Adw, Gdk, GLib, Graphene, Gtk, Pango
 
 from faugus.backdrop import Backdrop
-from faugus.logos import cached_logo, request_logo
+from faugus.hd_banners import request_hd
+from faugus.logos import cached_logo, load_logo_texture, logo_texture, request_logo
 from faugus.utils import HiDpiPaintable, add_css_once, load_full_texture, new_icon_image, new_picture, play_ui_sound
 
 # `_` (gettext) is installed into builtins by launcher.py's setup_gettext().
 
 HERO_SLIDE_PX = 48
 HERO_ANIM_MS = 420
+ART_SETTLE_MS = 140  # wait this long after the last move before swapping art
 SCROLL_ANIM_MS = 520
 TILE_W, TILE_H = 168, 252
 LOGO_MAX_W, LOGO_MAX_H = 540, 150
@@ -210,6 +212,7 @@ class Showcase:
         self.win = win
         self._hero_gameid = None
         self._hero_anim = None
+        self._art_source = None
         self._scroll_anim = None
         self._library_key = None
         self._tiles = {}
@@ -222,6 +225,7 @@ class Showcase:
 
         add_css_once("showcase", SHOWCASE_CSS, Gtk.STYLE_PROVIDER_PRIORITY_USER + 1)
         self.backdrop = Backdrop()
+        self.backdrop.pause_when = self._foreground_animating
         self._build()
         self._install_hooks()
         self._setup_attract()
@@ -291,6 +295,9 @@ class Showcase:
         self.hero_info.set_halign(Gtk.Align.START)
         self.hero_info.set_margin_start(80)
         self.hero_info.set_margin_end(80)
+        self.hero_info.add_css_class("showcase-hero-info")
+        self._hero_css = Gtk.CssProvider()
+        self.hero_info.get_style_context().add_provider(self._hero_css, Gtk.STYLE_PROVIDER_PRIORITY_USER + 2)
 
         self.title = Gtk.Label(xalign=0)
         self.title.add_css_class("showcase-title")
@@ -492,6 +499,25 @@ class Showcase:
         """Wrap a few window methods on this instance only (no class patching)."""
         win = self.win
 
+        # Logo slot in the game edit window (Faugus X file, no official changes).
+        # Faugus usually runs as `python -m faugus.launcher`, so its classes live
+        # in __main__, not faugus.launcher: take AddGame from the namespace the
+        # window's own code uses.
+        from faugus.logo_editor import install as install_logo_editor
+        add_game_cls = type(win).on_button_edit_clicked.__globals__.get("AddGame")
+        if add_game_cls is not None:
+            install_logo_editor(add_game_cls, self.on_logo_edited)
+        original_edit = win.on_button_edit_clicked
+
+        def on_button_edit_clicked(*args, **kwargs):
+            win._faugus_x_editing_game = win.selected()
+            try:
+                return original_edit(*args, **kwargs)
+            finally:
+                win._faugus_x_editing_game = None
+
+        win.on_button_edit_clicked = on_button_edit_clicked
+
         from faugus.launch_screen import LaunchScreen
         self.launch_screen = LaunchScreen(win)
         self._known_running = set(win.running)
@@ -562,8 +588,6 @@ class Showcase:
             self.backdrop.show_game(None)
             return
         self.hero_info.set_visible(True)
-        if not self.attracting:
-            self.backdrop.show_game(game)
 
         running = game.gameid in self.win.running
         self.play_button.set_label(_("Stop") if running else _("Play"))
@@ -583,45 +607,98 @@ class Showcase:
         self.meta.set_text(self._meta_text(game))
         self._show_title_or_logo(game)
         self._animate_hero_in()
+        self._schedule_art()
+
+    # ------------------------------------------------------------------ deferred art
+    #
+    # Swapping the backdrop (texture upload) or decoding a logo while the
+    # carrousel slides makes the slide stutter. Text updates instantly; the
+    # heavy art waits until the carrousel animation has settled.
+
+    def _foreground_animating(self):
+        hero = self._hero_anim
+        return self._carrousel_sliding() or (hero is not None and hero.get_state() == Adw.AnimationState.PLAYING)
+
+    def _carrousel_sliding(self):
+        return getattr(self.win, "_carrousel_anim_id", None) is not None
+
+    def _schedule_art(self, delay=ART_SETTLE_MS):
+        if self._art_source is not None:
+            GLib.source_remove(self._art_source)
+        self._art_source = GLib.timeout_add(delay, self._apply_art)
+
+    def _apply_art(self):
+        if self._carrousel_sliding():
+            self._art_source = GLib.timeout_add(60, self._apply_art)
+            return False
+        self._art_source = None
+
+        game = self.win.selected()
+        if game is None:
+            return False
+        if not self.attracting:
+            self.backdrop.show_game(game)
+            self.backdrop.prefetch(self._neighbours(game))
+        if logo_texture(game.gameid) is None:
+            self._fetch_logo(game, lambda texture, gid=game.gameid: self._on_logo_ready(gid, texture))
+        return False
+
+    def _neighbours(self, game, radius=2):
+        games = self.win.carrousel_visible_games()
+        ids = [g.gameid for g in games]
+        if game.gameid not in ids or not games:
+            return []
+        i, n = ids.index(game.gameid), len(games)
+        return [games[(i + d) % n] for d in range(-radius, radius + 1) if d]
 
     # ------------------------------------------------------------------ logos
 
     @staticmethod
-    def _load_logo(path, max_w, max_h):
-        try:
-            texture = load_full_texture(path)
-        except GLib.Error:
-            return None, 0, 0
+    def _fit(texture, max_w, max_h):
         w, h = texture.get_width(), texture.get_height()
         if not w or not h:
-            return None, 0, 0
+            return 0, 0
         scale = min(max_w / w, max_h / h)
-        return texture, int(w * scale), int(h * scale)
+        return int(w * scale), int(h * scale)
+
+    @staticmethod
+    def _fetch_logo(game, on_texture):
+        """Decode (or first download) a logo off the UI thread."""
+        if cached_logo(game.gameid):
+            load_logo_texture(game.gameid, on_texture)
+        else:
+            request_logo(game, lambda _path, gid=game.gameid: load_logo_texture(gid, on_texture))
 
     def _show_title_or_logo(self, game):
-        path = cached_logo(game.gameid)
-        if path is None:
-            self.title_stack.set_visible_child_name("text")
-            request_logo(game, lambda p, gid=game.gameid: self._on_logo_ready(gid))
-            return
-        self._apply_logo(path)
-
-    def _apply_logo(self, path):
-        texture, w, h = self._load_logo(path, LOGO_MAX_W, LOGO_MAX_H)
+        texture = logo_texture(game.gameid)  # in-memory only: never decode here
         if texture is None:
+            self.title_stack.set_visible_child_name("text")
+        else:
+            self._apply_logo_texture(texture)
+
+    def _apply_logo_texture(self, texture):
+        w, h = self._fit(texture, LOGO_MAX_W, LOGO_MAX_H)
+        if not w:
             self.title_stack.set_visible_child_name("text")
             return
         # HiDpiPaintable reports w x h as the natural size, so GTK doesn't
-        # lay the logo out at its (often >1000 px) native resolution.
+        # lay the logo out at its native resolution.
         self.logo.set_paintable(HiDpiPaintable(texture, w, h))
         self.logo.set_size_request(w, h)
         self.title_stack.set_visible_child_name("logo")
 
-    def _on_logo_ready(self, gameid):
+    def on_logo_edited(self, game):
+        """The user changed a logo in the edit window: show it right away."""
+        if game.gameid != self._hero_gameid:
+            return
+        if cached_logo(game.gameid) is None:
+            self.title_stack.set_visible_child_name("text")
+        # Loads the new file, or (for "Automatic") downloads the default again.
+        self._fetch_logo(game, lambda texture, gid=game.gameid: self._on_logo_ready(gid, texture))
+
+    def _on_logo_ready(self, gameid, texture):
         if gameid == self._hero_gameid:
-            path = cached_logo(gameid)
-            if path:
-                self._apply_logo(path)
+            self._apply_logo_texture(texture)
 
     def _meta_text(self, game):
         win = self.win
@@ -647,11 +724,14 @@ class Showcase:
         if self._hero_anim is not None:
             self._hero_anim.skip()
 
-        base = 80
-
+        # Slide with a CSS transform rather than a margin: a margin change
+        # re-lays-out the whole hero page every frame, mid carrousel slide.
         def step(value):
             self.hero_info.set_opacity(value)
-            self.hero_info.set_margin_start(int(base + (1.0 - value) * HERO_SLIDE_PX))
+            offset = (1.0 - value) * HERO_SLIDE_PX
+            self._hero_css.load_from_data(
+                f".showcase-hero-info {{ transform: translateX({offset:.1f}px); }}".encode()
+            )
 
         target = Adw.CallbackAnimationTarget.new(step)
         anim = Adw.TimedAnimation.new(self.hero_info, 0.0, 1.0, HERO_ANIM_MS, target)
@@ -693,7 +773,11 @@ class Showcase:
         )
         for game in games:
             self.grid.append(self._build_tile(game))
-            request_logo(game)  # warm the logo cache in the background
+            # Warm the logo cache (download and/or decode) in the background,
+            # so the hero can show logos instantly while browsing.
+            if logo_texture(game.gameid) is None:
+                self._fetch_logo(game, lambda _texture: None)
+            request_hd(game)  # full-resolution backdrop, downloaded once
         if self._hero_gameid:
             self._mark_current_tile(self._hero_gameid)
 
@@ -1089,9 +1173,9 @@ class Showcase:
         if game is None:
             return
         self.caption_title.set_text(game.title)
-        path = cached_logo(game.gameid)
-        texture, w, h = self._load_logo(path, CAPTION_LOGO_MAX_W, CAPTION_LOGO_MAX_H) if path else (None, 0, 0)
-        if texture is not None:
+        texture = logo_texture(game.gameid)
+        w, h = self._fit(texture, CAPTION_LOGO_MAX_W, CAPTION_LOGO_MAX_H) if texture is not None else (0, 0)
+        if w:
             self.caption_logo.set_paintable(HiDpiPaintable(texture, w, h))
             self.caption_logo.set_size_request(w, h)
             self.caption_stack.set_visible_child_name("logo")
