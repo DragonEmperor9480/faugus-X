@@ -1,0 +1,26 @@
+# Maintainer: DragonEmperor9480
+# Faugus X: console-style fork of Faugus Launcher. Installs alongside faugus-launcher.
+
+pkgname=faugus-x-git
+pkgver=r0
+pkgrel=1
+pkgdesc="Console-style fork of Faugus Launcher for running Windows games with UMU-Launcher"
+arch=('any')
+url="https://github.com/DragonEmperor9480/faugus-X"
+license=('MIT')
+depends=('python' 'python-gobject' 'python-requests' 'python-pillow' 'python-vdf' 'python-psutil' 'icoextract' 'gtk4' 'libadwaita' 'libmanette')
+makedepends=('git' 'gettext')
+provides=('faugus-x')
+conflicts=('faugus-x')
+source=("faugus-x::git+https://github.com/DragonEmperor9480/faugus-X.git")
+sha256sums=('SKIP')
+
+pkgver() {
+    cd faugus-x
+    printf "r%s.%s" "$(git rev-list --count HEAD)" "$(git rev-parse --short HEAD)"
+}
+
+package() {
+    cd faugus-x
+    sh packaging/faugus-x/install.sh --prefix=/usr --destdir="$pkgdir"
+}
