@@ -12,7 +12,7 @@ depends=('python' 'python-gobject' 'python-requests' 'python-pillow' 'python-vdf
 makedepends=('git' 'gettext')
 provides=('faugus-x')
 conflicts=('faugus-x')
-source=("faugus-x::git+https://github.com/DragonEmperor9480/faugus-X.git")
+source=("faugus-x::git+https://github.com/DragonEmperor9480/faugus-X.git#branch=faugus-x")
 sha256sums=('SKIP')
 
 pkgver() {

@@ -78,7 +78,7 @@ python-gobject python-requests python-pillow python-vdf python-psutil icoextract
 ```
 Then:
 ```
-git clone https://github.com/DragonEmperor9480/faugus-X.git
+git clone -b faugus-x https://github.com/DragonEmperor9480/faugus-X.git
 cd faugus-X
 ./packaging/faugus-x/install.sh
 ```
@@ -89,7 +89,7 @@ To update, `git pull` and run the install script again. To remove it, run `./pac
 ### Arch-based distributions
 Install Faugus X as a package (`faugus-x-git`), so pacman tracks it and installs the dependencies:
 ```
-git clone https://github.com/DragonEmperor9480/faugus-X.git
+git clone -b faugus-x https://github.com/DragonEmperor9480/faugus-X.git
 cd faugus-X/packaging/faugus-x
 makepkg -si
 ```
@@ -97,7 +97,7 @@ To update, run `makepkg -si` there again. To remove it, run `sudo pacman -R faug
 
 ### Run from source (development)
 ```
-git clone https://github.com/DragonEmperor9480/faugus-X.git
+git clone -b faugus-x https://github.com/DragonEmperor9480/faugus-X.git
 cd faugus-X
 python3 -m faugus.launcher
 ```
