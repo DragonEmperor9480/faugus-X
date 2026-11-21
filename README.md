@@ -2,7 +2,7 @@
 
 A console-style fork of [Faugus Launcher](https://github.com/Faugus/faugus-launcher), the simple and lightweight app for running Windows games on Linux with [UMU-Launcher](https://github.com/Open-Wine-Components/umu-launcher).
 
-Faugus X keeps everything Faugus does and adds **Showcase**, a full-screen interface inspired by game consoles and Steam's Big Picture: big moving game art, real game logos, a console-style launch screen, and an idle attract mode.
+Faugus X keeps everything Faugus does and adds **Showcase**, a full-screen interface inspired by game consoles and Steam's Big Picture: big moving game art, real game logos, a console-style launch screen, and an idle attract mode. It is made to be used from the couch with just a controller: turn the controller on, pick a game, play, come back, and switch the PC off, all without touching the mouse.
 
 ![Faugus X home screen](screenshots/faugus-x/home.jpg)
 
@@ -16,7 +16,7 @@ A new **Showcase** interface mode, next to Faugus' List, Grid, Covers and Carrou
 - **Full-screen by default.** Toggle with the button in the top-right corner or **F11**.
 - **Hero area** for the selected game: its logo, playtime, last played, and big **Play** / **Stop** and **⋯** (game menu) buttons.
 - **Carousel** of covers along the bottom, as in Faugus' Carrousel mode.
-- **Top bar** with search (**Ctrl+F**), add game, settings, kill and fullscreen buttons, plus a clock. The bottom bar is hidden.
+- **Top bar** with search (**Ctrl+F**), add game, settings, kill, power and fullscreen buttons, plus a clock. The bottom bar is hidden.
 - **Your Library**: scroll down for a grid of every game. Click to select, double-click to play, right-click for the game menu.
 
 ### Animated full-screen backdrop
@@ -43,11 +43,16 @@ After 45 seconds without input on the home screen, the interface fades away and 
 
 ![Attract mode](screenshots/faugus-x/attract-mode.jpg)
 
+### Made for a controller
+The whole loop works without a mouse or keyboard:
+
+1. **Turn on the controller and Faugus X opens.** Optional, in **Settings → Miscellaneous → Open when a controller connects**. Faugus X opens (or comes to the front) when a controller connects, or when you press its **PS / Home** button after it was off or idle for a minute. Controllers with a USB wireless dongle only work with the Home button, since the dongle stays connected. It also works right after login, without Faugus X running. It never opens while a game started from Faugus is running, and Steam's virtual controller is ignored.
+2. **Pick a game and play.** Gamepad navigation is on by default: D-pad or stick to browse, Cross / A to play, Triangle / Y for the game menu.
+3. **Come back after playing.** When a game closes, Faugus X returns to the front, full-screen, with the game you just played selected. (On KDE Plasma it asks KWin to raise the window, so it works even if Faugus X was minimized.)
+4. **Switch off from the power menu.** The power button in the top bar opens **Sleep, Restart, Shut down, Log out and Exit Faugus X**. Restart, Shut down and Log out ask for a second press (“Press again to shut down”), so a stray button can't switch the PC off. They go through your desktop (KDE Plasma, GNOME) so apps close normally; without one (for example in gamescope) Faugus X asks systemd directly.
+
 ### Download missing artwork
 **Settings → Interface**, under the SteamGridDB API key: **Download missing artwork** goes through every game and fills the gaps: banners, HD banners and logos. It never replaces artwork you already have or picked yourself.
-
-### Open when a controller connects
-**Settings → Miscellaneous → Open when a controller connects**: plug in or connect a controller, or press its **PS / Home** button after it was off or idle for a minute, and Faugus X opens (or comes to the front), like a console. Controllers with a USB wireless dongle only work with the Home button, since the dongle stays connected. It also works right after login, without Faugus X running. It never opens while a game started from Faugus is running, so a controller that reconnects mid-game won't interrupt you. Steam's virtual controller is ignored.
 
 ### Smooth on modest hardware
 Artwork is decoded in the background, the backdrop is drawn without per-frame restyling, and heavy work waits until carousel slides finish. Tested at 60 fps on Intel UHD 630 integrated graphics.
@@ -120,6 +125,7 @@ python3 -m faugus.launcher
 | Search | Ctrl+F (Esc to close) | |
 | Fullscreen | F11 | |
 | Hide launch screen | Esc | Circle / B |
+| Power menu | power button (top bar) | move up to the top bar, then Cross / A |
 | Wake from attract mode | any key / mouse move | any button |
 
 Other controller buttons work as in Faugus (see the [gamepad mapping](README.faugus.md#gamepad-mapping)).
@@ -151,6 +157,7 @@ faugus/logo_editor.py      Logo slot and picker in the edit window
 faugus/artwork_refresh.py  "Download missing artwork"
 faugus/xbridge.py          launch status from the runner to the launch screen
 faugus/x_setup.py          first-run defaults and the SteamGridDB requirement
+faugus/power_menu.py       power menu (sleep, restart, shut down, log out)
 faugus/controller_watch.py open Faugus X when a controller connects
 packaging/faugus-x/        installer and PKGBUILD
 ```

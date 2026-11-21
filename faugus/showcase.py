@@ -30,7 +30,7 @@ import gi
 
 gi.require_version("Gtk", "4.0")
 gi.require_version("Adw", "1")
-from gi.repository import Adw, Gdk, GLib, Graphene, Gtk, Pango
+from gi.repository import Adw, Gdk, Gio, GLib, Graphene, Gtk, Pango
 
 from faugus.backdrop import Backdrop
 from faugus.hd_banners import request_hd
@@ -192,6 +192,52 @@ flowboxchild.showcase-current .showcase-tile {
     opacity: 0.85;
 }
 """
+
+
+KWIN_ACTIVATE_JS = """
+const list = workspace.stackingOrder;
+for (let i = list.length - 1; i >= 0; i--) {
+    const w = list[i];
+    if (w.pid === %d && w.normalWindow) {
+        w.minimized = false;
+        workspace.activeWindow = w;
+        break;
+    }
+}
+"""
+
+
+def _kwin_bus():
+    return Gio.bus_get_sync(Gio.BusType.SESSION, None)
+
+
+def _kwin_activate_own_window():
+    """Raise and focus this process' window through KWin scripting (KDE Plasma only)."""
+    import tempfile
+    try:
+        bus = _kwin_bus()
+        owner = bus.call_sync("org.freedesktop.DBus", "/org/freedesktop/DBus", "org.freedesktop.DBus",
+                              "NameHasOwner", GLib.Variant("(s)", ("org.kde.KWin",)),
+                              GLib.VariantType.new("(b)"), Gio.DBusCallFlags.NONE, 1000, None)
+        if not owner.unpack()[0]:
+            return
+        name = f"faugus-x-activate-{os.getpid()}"
+        with tempfile.NamedTemporaryFile("w", suffix=".js", prefix="faugus-x-", delete=False,
+                                         dir=GLib.get_user_runtime_dir()) as script:
+            script.write(KWIN_ACTIVATE_JS % os.getpid())
+        try:
+            call = lambda path, iface, method, args=None, reply=None: bus.call_sync(
+                "org.kde.KWin", path, iface, method, args, reply, Gio.DBusCallFlags.NONE, 2000, None)
+            call("/Scripting", "org.kde.kwin.Scripting", "unloadScript", GLib.Variant("(s)", (name,)))
+            script_id = call("/Scripting", "org.kde.kwin.Scripting", "loadScript",
+                             GLib.Variant("(ss)", (script.name, name)), GLib.VariantType.new("(i)")).unpack()[0]
+            if script_id >= 0:
+                call(f"/Scripting/Script{script_id}", "org.kde.kwin.Script", "run")
+            call("/Scripting", "org.kde.kwin.Scripting", "unloadScript", GLib.Variant("(s)", (name,)))
+        finally:
+            os.unlink(script.name)
+    except (GLib.Error, OSError) as error:
+        print(f"Faugus X: could not raise the window through KWin: {error}", flush=True)
 
 
 def _fixed_holder(picture):
@@ -440,7 +486,15 @@ class Showcase:
         tool("faugus-add-symbolic", _("Add game"), lambda b: win.on_button_add_clicked(b))
         tool("faugus-settings-symbolic", _("Settings"), lambda b: win.on_button_settings_clicked(b))
         tool("faugus-kill-symbolic", _("Kill all running games"), lambda b: win.on_button_kill_clicked(b))
+        self.power_menu = None
+        self.power_button = tool("system-shutdown-symbolic", _("Power"), self._on_power, themed=True)
         return bar
+
+    def _on_power(self, button):
+        if self.power_menu is None:
+            from faugus.power_menu import PowerMenu
+            self.power_menu = PowerMenu(self.win, button)
+        self.power_menu.popup()
 
     def _adopt_search_entry(self):
         entry = getattr(self.win, "entry_search", None)
@@ -578,11 +632,35 @@ class Showcase:
         for gameid in stopped:
             self.launch_screen.game_stopped(gameid)
 
+        if stopped and not running:
+            GLib.timeout_add(300, self.return_home, next(iter(stopped)))
+
         if started:
             gameid = next(iter(started))
             game = next((g for g in self.win.games if g.gameid == gameid), None)
             if game is not None:
                 self.launch_screen.show(game)
+
+    def return_home(self, gameid=None):
+        """A game just closed: bring Faugus X back, on the game you played, like a console."""
+        win = self.win
+        if win.running:
+            return False
+        self.note_activity()
+        game = next((g for g in win.games if g.gameid == gameid), None)
+        if game is not None:
+            self.select_game(game)
+        if self.vadj.get_value() > 0:
+            self.scroll_to_top(focus_carrousel=True)
+        elif getattr(win, "carrousel_fixed", None) is not None:
+            win.carrousel_fixed.grab_focus()
+        if getattr(win, "fullscreen_activated", False) and not win.is_fullscreen():
+            win.fullscreen()
+        win.present()
+        # Wayland compositors may ignore present() from an app that isn't focused
+        # (focus-stealing prevention). On KDE Plasma, ask KWin directly.
+        _kwin_activate_own_window()
+        return False
 
     # ------------------------------------------------------------------ hero
 
