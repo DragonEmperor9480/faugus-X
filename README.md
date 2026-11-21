@@ -1,164 +1,159 @@
-# Faugus
-A simple and lightweight app for running Windows games using [UMU-Launcher](https://github.com/Open-Wine-Components/umu-launcher)
+# Faugus X
 
-### Support the project
-<a href='https://ko-fi.com/K3K210EMDU' target='_blank'><img src="https://github.com/Faugus/faugus-launcher/blob/main/assets/ko-fi.png" width="155" height="35"/></a>&nbsp;&nbsp;
-<a href='https://www.paypal.com/donate/?business=57PP9DVD3VWAN&no_recurring=0&currency_code=USD' target='_blank'><img src="https://github.com/Faugus/faugus-launcher/blob/main/assets/paypal.png" width="155" height="35"/></a>
+A console-style fork of [Faugus Launcher](https://github.com/Faugus/faugus-launcher), the simple and lightweight app for running Windows games on Linux with [UMU-Launcher](https://github.com/Open-Wine-Components/umu-launcher).
 
-# Installation
-## Arch-based distributions (AUR)
-```
-yay -S --noconfirm faugus-launcher
-```
+Faugus X keeps everything Faugus does and adds **Showcase**, a full-screen interface inspired by game consoles and Steam's Big Picture: big moving game art, real game logos, a console-style launch screen, and an idle attract mode.
 
-## Fedora / Nobara (Copr)
-```
-sudo dnf -y copr enable faugus/faugus-launcher
-sudo dnf -y install faugus-launcher
-```
+![Faugus X home screen](screenshots/faugus-x/home.jpg)
 
-## Debian-based distributions
-### PPA (Ubuntu, Mint, KDE Neon...)
-```
-sudo dpkg --add-architecture i386
-sudo add-apt-repository -y ppa:faugus/faugus-launcher
-sudo apt update
-sudo apt install -y faugus-launcher
-```
-### .deb package
-```
-sudo dpkg --add-architecture i386
-sudo apt update
-sudo apt install -y wget
-mkdir -p ~/faugus-launcher
-wget -P ~/faugus-launcher https://github.com/Faugus/faugus-launcher/releases/download/2.5.9/faugus-launcher_2.5.9-1_all.deb
-sudo apt install -y ~/faugus-launcher/*.deb
-sudo rm -r ~/faugus-launcher
-```
+> **Unofficial fork.** Faugus X is not made or endorsed by the Faugus developer. Please report Faugus X bugs here, not to the Faugus project. For everything that isn't Showcase-specific (installation, Proton, prefixes, Steam shortcuts…) see the original [Faugus README](README.faugus.md).
 
-## [Flatpak](https://flathub.org/apps/io.github.Faugus.faugus-launcher)
-### Installation:
-```
-flatpak install flathub io.github.Faugus.faugus-launcher
-```
-### Running:
-```
-flatpak run io.github.Faugus.faugus-launcher
-```
-### MangoHud installation:
-```
-flatpak install org.freedesktop.Platform.VulkanLayer.MangoHud/x86_64/25.08
-```
-### Important permissions:
-```
-# Allow Faugus Launcher to detect Steam users and games
-sudo flatpak override io.github.Faugus.faugus-launcher --filesystem=~/.var/app/com.valvesoftware.Steam/
-sudo flatpak override io.github.Faugus.faugus-launcher --talk-name=org.freedesktop.Flatpak
+## What Faugus X adds
 
-# Allow Steam to run Faugus Launcher shortcuts
-sudo flatpak override com.valvesoftware.Steam --talk-name=org.freedesktop.Flatpak
+### Showcase interface
+A new **Showcase** interface mode, next to Faugus' List, Grid, Covers and Carrousel modes.
 
-# Allow Steam to see Faugus Launcher games icons
-sudo flatpak override com.valvesoftware.Steam --filesystem=~/.var/app/io.github.Faugus.faugus-launcher/config/faugus-launcher/
-sudo flatpak override com.valvesoftware.Steam --filesystem=~/.config/faugus-launcher/
-```
+- **Full-screen by default.** Toggle with the button in the top-right corner or **F11**.
+- **Hero area** for the selected game: its logo, playtime, last played, and big **Play** / **Stop** and **⋯** (game menu) buttons.
+- **Carousel** of covers along the bottom, as in Faugus' Carrousel mode.
+- **Top bar** with search (**Ctrl+F**), add game, settings, kill and fullscreen buttons, plus a clock. The bottom bar is hidden.
+- **Your Library**: scroll down for a grid of every game. Click to select, double-click to play, right-click for the game menu.
 
-## Build from source
-```
-meson setup builddir --prefix=/usr
-cd builddir
-ninja
-sudo ninja install
-```
-### Dependencies:
-```
-meson ninja pygobject requests pillow vdf psutil icoextract gtk4 libadwaita libmanette
-```
+### Animated full-screen backdrop
+- The selected game's banner fills the whole screen and slowly drifts and zooms.
+- Switching games crossfades to the new banner.
+- Games without a banner use their cover, blurred.
+- **HD banners:** Faugus stores banners at 1920×620, which looks soft when stretched to a full screen. Faugus X downloads the full-resolution (3840×1240) copy of *the same banner* from SteamGridDB, matched by comparing images, so your chosen banner is respected.
 
-# Usage
-[![YouTube](http://i.ytimg.com/vi/Ay6C2f55Pc8/hqdefault.jpg)](https://www.youtube.com/watch?v=Ay6C2f55Pc8)
+### Game logos
+- Each game shows its **transparent logo** from SteamGridDB instead of plain text, in the hero, on the launch screen and in attract mode.
+- **Change logo** in the game's edit window: a new **Logo** slot under the banner opens a searchable SteamGridDB logo picker. Right-click it to load a logo from a file, use the text title instead, or go back to automatic.
 
-# Information
-### Default prefixes location
-```
-~/Faugus/
-```
+| Logo slot in the edit window | Logo picker |
+|---|---|
+| ![Logo slot in the edit window](screenshots/faugus-x/edit-logo.jpg) | ![Logo picker](screenshots/faugus-x/logo-picker.jpg) |
 
-### Protons location
-```
-~/.local/share/Steam/compatibilitytools.d/
-```
+### Console-style launch screen
+When you start a game, a full-screen launch screen shows the game's art, cover and logo with live status from the runner (Proton/UMU setup, downloads…). It stays up until the game window actually appears, instead of dropping back to the launcher in between. Press **Esc** or **B** on a controller to hide it.
 
-### Themes location
-Native and Flatpak.
-```
-~/.themes
-```
-Native. Flatpak needs permission.
-```
-~/.local/share/themes
-```
-```
-sudo flatpak override io.github.Faugus.faugus-launcher --filesystem=xdg-data/themes:ro
-```
+![Launch screen](screenshots/faugus-x/launch-screen.jpg)
 
-Native only.
-```
-/usr/share/themes
-```
+### Attract mode
+After 45 seconds without input on the home screen, the interface fades away and Faugus X cycles through your games' banners with their logos and **PRESS ANY BUTTON**, like a console. Any mouse, keyboard or controller input wakes it; that first press only wakes the screen. It never starts while a menu, dialog, search or the launch screen is open.
 
-### Gamepad mapping
-| Action        | Playstation | Xbox     |
-|---------------|-------------|----------|
-| Confirm       | Cross       | A        |
-| Cancel        | Circle      | B        |
-| Game menu     | Triangle    | Y        |
-| Kill          | Square      | X        |
-| Add game/app  | L1          | LB       |
-| Settings      | R1          | RB       |
-| Power options | Options     | Menu     |
+![Attract mode](screenshots/faugus-x/attract-mode.jpg)
 
-# Translations
-[![Translation status](https://hosted.weblate.org/widget/faugus-launcher/faugus-launcher/svg-badge.svg)](https://hosted.weblate.org/engage/faugus-launcher/)
+### Download missing artwork
+**Settings → Interface**, under the SteamGridDB API key: **Download missing artwork** goes through every game and fills the gaps: banners, HD banners and logos. It never replaces artwork you already have or picked yourself.
 
-Translations are managed on [Weblate](https://hosted.weblate.org/projects/faugus-launcher/faugus-launcher/) — Sign in, pick your language, and translate directly in the browser.
+### Smooth on modest hardware
+Artwork is decoded in the background, the backdrop is drawn without per-frame restyling, and heavy work waits until carousel slides finish. Tested at 60 fps on Intel UHD 630 integrated graphics.
 
-# Screenshots
+## Screenshots
 
 <details>
-<summary><b>Main window</b></summary>
+<summary><b>More screenshots</b></summary>
 <br>
 
-**List**
-<br><img src="screenshots/main-list.png">
+**Home**
 
-**Grid**
-<br><img src="screenshots/main-grid.png">
 
-**Covers**
-<br><img src="screenshots/main-covers.png">
+![Home screen](screenshots/faugus-x/home-stellar-blade.jpg)
 
-**Carrousel**
-<br><img src="screenshots/main-carrousel.png">
+**Your Library**
+
+
+![Your Library](screenshots/faugus-x/library.jpg)
 
 </details>
 
-<details>
-<summary><b>Add/Edit game</b></summary>
-<br>
-<img src="screenshots/add-main.png">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<img src="screenshots/add-tool.png">
-</details>
+## Getting started
 
-<details>
-<summary><b>Settings</b></summary>
-<br>
-<img src="screenshots/settings-general.png">
-<br>
-<img src="screenshots/settings-interface.png">
-</details>
+Faugus X installs **alongside Faugus**. Both can be installed and even open at the same time. They share your games, covers, banners, prefixes and playtime, so anything you add in one shows up in the other. Faugus X keeps its own settings in `~/.config/faugus-x/`, starting from a copy of your Faugus settings.
 
-<details>
-<summary><b>Proton Manager</b></summary>
-<br>
-<img src="screenshots/proton-manager.png">
-</details>
+### Install (any distribution)
+Install the dependencies (the same as Faugus):
+```
+python-gobject python-requests python-pillow python-vdf python-psutil icoextract gtk4 libadwaita libmanette
+```
+Then:
+```
+git clone https://github.com/DragonEmperor9480/faugus-X.git
+cd faugus-X
+./packaging/faugus-x/install.sh
+```
+This installs Faugus X for your user (in `~/.local`) and adds **Faugus X** to your app menu. Use `sudo ./packaging/faugus-x/install.sh --system` to install it for all users instead.
+
+To update, `git pull` and run the install script again. To remove it, run `./packaging/faugus-x/install.sh --uninstall`. Your games and settings are kept.
+
+### Arch-based distributions
+Install Faugus X as a package (`faugus-x-git`), so pacman tracks it and installs the dependencies:
+```
+git clone https://github.com/DragonEmperor9480/faugus-X.git
+cd faugus-X/packaging/faugus-x
+makepkg -si
+```
+To update, run `makepkg -si` there again. To remove it, run `sudo pacman -R faugus-x-git`.
+
+### Run from source (development)
+```
+git clone https://github.com/DragonEmperor9480/faugus-X.git
+cd faugus-X
+python3 -m faugus.launcher
+```
+
+### First start
+- **A SteamGridDB API key is required.** Faugus X relies on SteamGridDB for banners, HD backgrounds and logos. On first start it asks for your free [API key](https://www.steamgriddb.com/profile/preferences/api) and checks it with SteamGridDB before continuing. It asks again if SteamGridDB is turned off in Settings.
+- **Showcase is the default interface.** If you used Faugus before, Faugus X switches you to Showcase once on its first start. You can still pick List, Grid, Covers or Carrousel in **Settings → Interface → Interface Mode**.
+
+## Controls
+
+| Action | Keyboard / mouse | Controller |
+|---|---|---|
+| Browse games | ← → / scroll | D-pad / left stick |
+| Play | Enter / Play button | Cross / A |
+| Game menu | ⋯ button / right-click | Triangle / Y |
+| Search | Ctrl+F (Esc to close) | |
+| Fullscreen | F11 | |
+| Hide launch screen | Esc | Circle / B |
+| Wake from attract mode | any key / mouse move | any button |
+
+Other controller buttons work as in Faugus (see the [gamepad mapping](README.faugus.md#gamepad-mapping)).
+
+## Files
+
+Faugus X stores its extra artwork next to Faugus' own:
+
+| What | Where |
+|---|---|
+| Logos | `~/.local/share/faugus-launcher/logos/` |
+| HD banners | `~/.local/share/faugus-launcher/banners-hd/` |
+
+Delete a game's file there to have it downloaded again.
+
+The idle time before attract mode can be changed with the `FAUGUS_X_IDLE_SECONDS` environment variable (default 45).
+
+## Staying in sync with Faugus
+
+Faugus X is built to follow upstream Faugus easily. Almost all of it lives in its own files:
+
+```
+faugus/showcase.py         Showcase interface
+faugus/launch_screen.py    launch screen
+faugus/backdrop.py         animated backdrop
+faugus/hd_banners.py       HD banner matching
+faugus/logos.py            logo downloads and cache
+faugus/logo_editor.py      Logo slot and picker in the edit window
+faugus/artwork_refresh.py  "Download missing artwork"
+faugus/xbridge.py          launch status from the runner to the launch screen
+faugus/x_setup.py          first-run defaults and the SteamGridDB requirement
+packaging/faugus-x/        installer and PKGBUILD
+```
+
+Faugus' own files only have small, commented changes: the Showcase mode and two startup calls in `launcher.py`, a few lines in `runner.py` for the launch status, and the separate app ID and settings file in `path_manager.py` (plus one-line ID fixes in `tray_only.py`, `shortcut.py` and the autostart entry).
+
+## Credits and license
+
+- [Faugus Launcher](https://github.com/Faugus/faugus-launcher) by Faugus: the launcher Faugus X is built on. If you like it, consider supporting the original project: [Ko-fi](https://ko-fi.com/K3K210EMDU) · [PayPal](https://www.paypal.com/donate/?business=57PP9DVD3VWAN&no_recurring=0&currency_code=USD).
+- Game artwork and logos come from [SteamGridDB](https://www.steamgriddb.com/), downloaded with each user's own API key.
+- Released under the [MIT License](LICENSE), like Faugus.
