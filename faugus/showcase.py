@@ -1006,7 +1006,27 @@ class Showcase:
             if focus is not None and (focus is entry or focus.is_ancestor(entry)):
                 self.toggle_search(False)
                 return True
-        return False
+        return self._wasd(keyval, state)
+
+    WASD = {
+        Gdk.KEY_w: Gtk.DirectionType.UP,
+        Gdk.KEY_a: Gtk.DirectionType.LEFT,
+        Gdk.KEY_s: Gtk.DirectionType.DOWN,
+        Gdk.KEY_d: Gtk.DirectionType.RIGHT,
+    }
+
+    def _wasd(self, keyval, state):
+        """W A S D move like the arrow keys (and the D-pad), unless the user is typing."""
+        direction = self.WASD.get(Gdk.keyval_to_lower(keyval))
+        if direction is None:
+            return False
+        if state & (Gdk.ModifierType.CONTROL_MASK | Gdk.ModifierType.ALT_MASK | Gdk.ModifierType.SUPER_MASK):
+            return False
+        focus = self.win.get_focus()
+        if isinstance(focus, Gtk.Editable) or (focus is not None and focus.get_ancestor(Gtk.Editable) is not None):
+            return False
+        from faugus.main_screen_nav import navigate_focus
+        return navigate_focus(direction)
 
     # ------------------------------------------------------------------ attract mode
 

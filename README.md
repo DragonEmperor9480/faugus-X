@@ -110,7 +110,7 @@ python3 -m faugus.launcher
 
 | Action | Keyboard / mouse | Controller |
 |---|---|---|
-| Browse games | ← → / scroll | D-pad / left stick |
+| Browse games | ← → ↑ ↓ or W A S D / scroll | D-pad / left stick |
 | Play | Enter / Play button | Cross / A |
 | Game menu | ⋯ button / right-click | Triangle / Y |
 | Search | Ctrl+F (Esc to close) | |
