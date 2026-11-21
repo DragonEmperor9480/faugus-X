@@ -108,6 +108,7 @@ python3 -m faugus.launcher
 ### First start
 - **A SteamGridDB API key is required.** Faugus X relies on SteamGridDB for banners, HD backgrounds and logos. On first start it asks for your free [API key](https://www.steamgriddb.com/profile/preferences/api) and checks it with SteamGridDB before continuing. It asks again if SteamGridDB is turned off in Settings.
 - **Showcase is the default interface.** If you used Faugus before, Faugus X switches you to Showcase once on its first start. You can still pick List, Grid, Covers or Carrousel in **Settings → Interface → Interface Mode**.
+- **Gamepad navigation is on by default**, so you can use Faugus X with a controller right away. Turn it off in **Settings → Miscellaneous → Gamepad navigation**.
 
 ## Controls
 

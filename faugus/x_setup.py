@@ -1,7 +1,8 @@
 """Faugus X: first-run defaults and the SteamGridDB requirement.
 
-- Showcase is the default interface. Users coming from Faugus are switched
-  to Showcase once, on Faugus X's first start; they can change it later.
+- Showcase is the default interface and gamepad navigation is on. Users
+  coming from Faugus get these once (each the first time Faugus X knows
+  about it); they can change them later and Faugus X won't touch them again.
 - Faugus X needs a SteamGridDB API key (banners, HD backdrops, logos).
   Without one, a window that can't be skipped asks for it: paste a key
   (checked online) or quit. It is checked again after Settings closes.
@@ -13,8 +14,12 @@ from gi.repository import GLib, Gtk
 
 from faugus.config_manager import ConfigManager
 
-FIRST_RUN_KEY = "faugus-x-initialized"
-DEFAULT_INTERFACE = "Showcase"
+FIRST_RUN_KEY = "faugus-x-initialized"      # older marker: Showcase was applied
+APPLIED_KEY = "faugus-x-defaults-applied"   # which DEFAULTS were already applied
+DEFAULTS = {
+    "interface-mode": "Showcase",
+    "gamepad-navigation": "True",
+}
 KEY_URL = "https://www.steamgriddb.com/profile/preferences/api"
 API = "https://www.steamgriddb.com/api/v2"
 
@@ -27,11 +32,17 @@ CSS = """
 # ---------------------------------------------------------------- defaults
 
 def prepare_first_run():
-    """Make Showcase the default interface (once). Run before the window is built."""
+    """Apply Faugus X's defaults, each one only once. Run before the window is built."""
     cfg = ConfigManager()
-    if cfg.config.get(FIRST_RUN_KEY) == "True":
+    applied = cfg.config.get(APPLIED_KEY)
+    if not isinstance(applied, list):
+        applied = ["interface-mode"] if cfg.config.get(FIRST_RUN_KEY) == "True" else []
+    pending = [key for key in DEFAULTS if key not in applied]
+    if not pending:
         return
-    cfg.config["interface-mode"] = DEFAULT_INTERFACE
+    for key in pending:
+        cfg.config[key] = DEFAULTS[key]
+    cfg.config[APPLIED_KEY] = applied + pending
     cfg.config[FIRST_RUN_KEY] = "True"
     cfg.save_config()
 
