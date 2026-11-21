@@ -693,6 +693,12 @@ class Showcase:
         self.logo.set_size_request(w, h)
         self.title_stack.set_visible_child_name("logo")
 
+    def refresh_library_art(self):
+        """A SteamGridDB key was just added: fetch logos and HD banners for everything."""
+        self._library_key = None
+        self.refresh_library()
+        self.on_artwork_refreshed()
+
     def on_artwork_refreshed(self):
         """New banners/logos were downloaded: show them for the current game."""
         game = self.win.selected()

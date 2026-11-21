@@ -98,7 +98,9 @@ class FaugusApp(Gtk.Application):
             start_daemon_now()
 
     def do_activate(self):
+        from faugus.x_setup import prepare_first_run, require_steamgriddb  # Faugus X
         if not self.window:
+            prepare_first_run()  # Faugus X: Showcase by default
             self.window = Main(self)
 
             if self.start_hidden:
@@ -106,6 +108,7 @@ class FaugusApp(Gtk.Application):
                 return
 
         self.window.present()
+        require_steamgriddb(self, self.window)  # Faugus X: needs a SteamGridDB key
 
 
 class Main(Gtk.ApplicationWindow, HiDpiMixin):
