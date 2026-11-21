@@ -37,9 +37,11 @@ EXIT_MS = 600
 ZOOM_SECONDS = 14.0
 ZOOM_AMOUNT = 0.10
 POLL_MS = 150
-MIN_VISIBLE_S = 2.2
 FALLBACK_TIMEOUT_S = 45
-CLOSED_GRACE_MS = 700
+# After the runner reports the game process, keep covering the menu until the
+# game window takes focus away from Faugus X (or this many seconds pass).
+WINDOW_WAIT_TIMEOUT_S = 90
+INACTIVE_HIDE_DELAY_MS = 250
 
 LAUNCH_CSS = """
 .launch-screen {
@@ -101,6 +103,11 @@ class LaunchScreen:
         self._zoom_tick = None
         self._anim = None
         self._closing = False
+        self._busy = False
+        self._waiting_window = False
+        self._wait_timeout_id = None
+        self._inactive_id = None
+        win.connect("notify::is-active", self._on_active_changed)
 
         self.status_dir = os.path.join(GLib.get_user_runtime_dir(), "faugus-x")
         os.makedirs(self.status_dir, exist_ok=True)
@@ -229,6 +236,8 @@ class LaunchScreen:
         self.game = game
         self.started_at = time.time()
         self._closing = False
+        self._busy = False
+        self._waiting_window = False
 
         self.title.set_text(game.title)
         self.status.set_text(_("Starting…"))
@@ -255,15 +264,13 @@ class LaunchScreen:
         self._pulse_id = GLib.timeout_add(110, self._on_pulse)
         self._poll_id = GLib.timeout_add(POLL_MS, self._on_poll)
 
-    def hide(self, *_args):
-        if not self.root.get_visible() or self._closing:
+    def hide(self, *_args, instant=False):
+        if not self.root.get_visible() or (self._closing and not instant):
             return
         self._closing = True
-        self._stop_timers(keep_zoom=True)
+        self._waiting_window = False
+        self._stop_timers(keep_zoom=not instant)
         start = self.root.get_opacity()
-
-        def leave(value):
-            self.root.set_opacity(start * (1.0 - value))
 
         def done(*_):
             self._stop_timers()
@@ -273,7 +280,51 @@ class LaunchScreen:
             if fixed is not None:
                 fixed.grab_focus()
 
+        if instant:
+            # The game window is already on top: drop the overlay without
+            # animating so the menu never flashes when the user returns.
+            if self._anim is not None:
+                self._anim.pause()
+            done()
+            return
+
+        def leave(value):
+            self.root.set_opacity(start * (1.0 - value))
+
         self._play(leave, EXIT_MS, Adw.Easing.EASE_IN_OUT_CUBIC, done)
+
+    def _on_active_changed(self, *_args):
+        if self.win.is_active() or not self.root.get_visible() or self._closing:
+            return
+        # Faugus X lost focus. If the game is no longer downloading updates,
+        # this is the game window appearing: hide behind it.
+        if self._busy and not self._waiting_window:
+            return
+        if self._inactive_id is not None:
+            GLib.source_remove(self._inactive_id)
+
+        def fire():
+            self._inactive_id = None
+            if not self.win.is_active() and self.root.get_visible():
+                self.hide(instant=True)
+            return False
+
+        self._inactive_id = GLib.timeout_add(INACTIVE_HIDE_DELAY_MS, fire)
+
+    def _wait_for_game_window(self):
+        self._waiting_window = True
+        self._determinate = False
+        self.status.set_text(_("Starting game…"))
+        if not self.win.is_active():
+            self._on_active_changed()
+            return
+
+        def give_up():
+            self._wait_timeout_id = None
+            self.hide()
+            return False
+
+        self._wait_timeout_id = GLib.timeout_add_seconds(WINDOW_WAIT_TIMEOUT_S, give_up)
 
     def game_stopped(self, gameid):
         if self.game is not None and self.game.gameid == gameid and self.root.get_visible():
@@ -337,18 +388,20 @@ class LaunchScreen:
             if fraction is not None:
                 self.progress.set_fraction(fraction)
             if state.get("closed"):
-                self.status.set_text(_("Enjoy your game"))
-                self._determinate = True
-                self.progress.set_fraction(1.0)
-                delay = max(CLOSED_GRACE_MS, int((MIN_VISIBLE_S - elapsed) * 1000))
-                GLib.timeout_add(delay, lambda: self.hide() or False)
                 self._poll_id = None
+                self._busy = False
+                self._wait_for_game_window()
                 return False
-            busy = state.get("pulse") or fraction is not None
+            busy = bool(state.get("pulse") or fraction is not None)
         else:
             busy = False
+        self._busy = busy
 
-        if elapsed > FALLBACK_TIMEOUT_S and not busy:
+        if elapsed > FALLBACK_TIMEOUT_S and not busy and not self.win.is_active():
+            self._poll_id = None
+            self.hide(instant=True)
+            return False
+        if elapsed > WINDOW_WAIT_TIMEOUT_S and not busy:
             self._poll_id = None
             self.hide()
             return False
@@ -366,7 +419,7 @@ class LaunchScreen:
         anim.play()
 
     def _stop_timers(self, keep_zoom=False):
-        for attr in ("_poll_id", "_pulse_id"):
+        for attr in ("_poll_id", "_pulse_id", "_wait_timeout_id", "_inactive_id"):
             source = getattr(self, attr)
             if source is not None:
                 GLib.source_remove(source)
