@@ -116,6 +116,8 @@ class LaunchScreen:
 
         add_css_once("launch_screen", LAUNCH_CSS, Gtk.STYLE_PROVIDER_PRIORITY_USER + 1)
         self._build()
+        # Wrap the window right away, not in the middle of a launch.
+        GLib.idle_add(lambda: (self.attach(), False)[1])
 
     # ------------------------------------------------------------------ build
 
@@ -230,6 +232,11 @@ class LaunchScreen:
         if current is None or getattr(self, "_host", None) is current:
             return
         host = Gtk.Overlay()
+        # Faugus' controller mode switches off pointer input on the window's
+        # child (and back on when the mouse moves). Hand that state to the new
+        # child, or the wrapped content would stay unclickable.
+        host.set_can_target(current.get_can_target())
+        current.set_can_target(True)
         win.set_child(None)
         host.set_child(current)
         host.add_overlay(self.root)
