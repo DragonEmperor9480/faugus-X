@@ -43,7 +43,7 @@ HERO_SLIDE_PX = 48
 HERO_ANIM_MS = 420
 ART_SETTLE_MS = 140  # wait this long after the last move before swapping art
 SCROLL_ANIM_MS = 520
-TILE_W, TILE_H = 168, 252
+TILE_W, TILE_H = 188, 282
 LOGO_MAX_W, LOGO_MAX_H = 540, 150
 CAPTION_LOGO_MAX_W, CAPTION_LOGO_MAX_H = 420, 130
 IDLE_SECONDS = int(os.environ.get("FAUGUS_X_IDLE_SECONDS", "45"))  # env override for testing
@@ -165,31 +165,46 @@ button.showcase-hint:hover { opacity: 1; }
     font-size: 16px;
     opacity: 0.6;
 }
-flowbox.showcase-grid > flowboxchild {
+/* Faugus gives every FlowBoxChild the CSS name "entry", so library cells
+   would be drawn as grey text fields: strip that, the cover is the tile. */
+flowbox.showcase-grid > .showcase-cell,
+flowbox.showcase-grid > .showcase-cell:focus,
+flowbox.showcase-grid > .showcase-cell:focus-within,
+flowbox.showcase-grid > .showcase-cell:hover,
+flowbox.showcase-grid > .showcase-cell:selected {
+    min-height: 0;
     padding: 0;
     margin: 0;
+    border: none;
+    border-radius: 0;
     background: none;
-    border-radius: 14px;
+    box-shadow: none;
     outline: none;
 }
 .showcase-tile {
-    border-radius: 14px;
-    box-shadow: 0 6px 16px alpha(black, 0.45);
+    border-radius: 12px;
+    box-shadow: 0 8px 20px alpha(black, 0.5);
     transition: transform 200ms ease, box-shadow 200ms ease;
 }
-flowboxchild:hover .showcase-tile {
-    transform: translateY(-6px) scale(1.04);
-    box-shadow: 0 14px 28px alpha(black, 0.55);
+.showcase-cell:hover .showcase-tile {
+    transform: translateY(-6px) scale(1.03);
+    box-shadow: 0 16px 30px alpha(black, 0.6);
 }
-flowboxchild:focus-visible .showcase-tile,
-flowboxchild.showcase-current .showcase-tile {
-    transform: translateY(-6px) scale(1.04);
-    box-shadow: 0 14px 28px alpha(black, 0.55), 0 0 0 3px @accent_bg_color, 0 0 24px alpha(@accent_bg_color, 0.6);
+.showcase-cell:focus-visible .showcase-tile,
+.showcase-cell.showcase-current .showcase-tile {
+    transform: translateY(-6px) scale(1.03);
+    box-shadow: 0 16px 30px alpha(black, 0.6), 0 0 0 3px @accent_bg_color, 0 0 26px alpha(@accent_bg_color, 0.55);
 }
 .showcase-tile-label {
+    color: alpha(white, 0.6);
     font-size: 14px;
     font-weight: 600;
-    opacity: 0.85;
+    transition: color 200ms ease;
+}
+.showcase-cell:hover .showcase-tile-label,
+.showcase-cell:focus-visible .showcase-tile-label,
+.showcase-cell.showcase-current .showcase-tile-label {
+    color: white;
 }
 """
 
@@ -902,17 +917,19 @@ class Showcase:
         frame.set_halign(Gtk.Align.CENTER)
         frame.append(picture)
 
-        label = Gtk.Label(label=game.title)
+        label = Gtk.Label(label=game.title, xalign=0)
         label.add_css_class("showcase-tile-label")
         label.set_ellipsize(Pango.EllipsizeMode.END)
         label.set_max_width_chars(1)
         label.set_size_request(TILE_W, -1)
 
-        box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=10)
+        box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=12)
+        box.set_halign(Gtk.Align.CENTER)
         box.append(frame)
         box.append(label)
 
         child = Gtk.FlowBoxChild()
+        child.add_css_class("showcase-cell")
         child.set_child(box)
         child.game = game
         child.set_tooltip_text(game.title)
