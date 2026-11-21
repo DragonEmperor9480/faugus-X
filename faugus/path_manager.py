@@ -8,7 +8,10 @@ from pathlib import Path
 
 IS_FLATPAK = 'FLATPAK_ID' in os.environ or os.path.exists('/.flatpak-info')
 APPIMAGE_PATH = os.environ.get('APPIMAGE')
-APP_ID = 'io.github.Faugus.faugus-launcher'
+# Faugus X: its own app identity, so it can run alongside Faugus.
+APP_ID = 'io.github.DragonEmperor9480.faugus-x'
+APP_OBJECT_PATH = '/' + APP_ID.replace('.', '/').replace('-', '_')
+FAUGUS_X_BINARY = 'faugus-x'
 TRAY_BUS_NAME = f'{APP_ID}.Tray'
 TRAY_OBJECT_PATH = '/io/github/Faugus/faugus_launcher/Tray'
 TRAY_INTERFACE = 'io.github.Faugus.Tray'
@@ -168,7 +171,13 @@ DOWNLOAD_DIR = PathManager.user_data('faugus-launcher/components')
 SHORTCUT_ICONS_DIR = PathManager.user_data('faugus-launcher/icons-nolauncher')
 FAUGUS_LAUNCHER_DIR = PathManager.user_config('faugus-launcher')
 PREFIXES_DIR = PathManager.user_home('Faugus')
-CONFIG_FILE_DIR = PathManager.user_config('faugus-launcher/config.json')
+# Faugus X: own settings file; games, artwork and prefixes stay shared with Faugus.
+CONFIG_FILE_DIR = PathManager.user_config('faugus-x/config.json')
+_FAUGUS_CONFIG_FILE = PathManager.user_config('faugus-launcher/config.json')
+if not os.path.exists(CONFIG_FILE_DIR) and os.path.isfile(_FAUGUS_CONFIG_FILE):
+    # First start: begin from the user's Faugus settings (theme, Proton, API key…).
+    os.makedirs(os.path.dirname(CONFIG_FILE_DIR), exist_ok=True)
+    shutil.copyfile(_FAUGUS_CONFIG_FILE, CONFIG_FILE_DIR)
 LOGS_DIR = PathManager.user_data('faugus-launcher/logs')
 ENVAR_DIR = PathManager.user_config('faugus-launcher/envar.json')
 GAMES_JSON = PathManager.user_data('faugus-launcher/games.json')
@@ -201,7 +210,7 @@ if APPIMAGE_PATH:
     LAUNCHER_PATH = APPIMAGE_PATH
     LAUNCHER_MODULE_ARGS = ""
 else:
-    LAUNCHER_PATH = PathManager.find_binary('faugus-launcher')
+    LAUNCHER_PATH = PathManager.find_binary(FAUGUS_X_BINARY)  # Faugus X
     if LAUNCHER_PATH:
         LAUNCHER_MODULE_ARGS = ""
     else:

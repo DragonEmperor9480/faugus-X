@@ -4487,7 +4487,7 @@ class Main(Gtk.ApplicationWindow, HiDpiMixin):
         return valid
 
     def manage_autostart_file(self, autostart_enabled, minimized_startup_enabled):
-        autostart_path = PathManager.user_home('.config/autostart/faugus-launcher.desktop')
+        autostart_path = PathManager.user_home('.config/autostart/faugus-x.desktop')  # Faugus X
         os.makedirs(os.path.dirname(autostart_path), exist_ok=True)
 
         if autostart_enabled:
@@ -4497,17 +4497,17 @@ class Main(Gtk.ApplicationWindow, HiDpiMixin):
                 icon = "io.github.Faugus.faugus-launcher"
             else:
                 exec_cmd = f"{LAUNCHER_PATH} {LAUNCHER_MODULE_ARGS}"
-                icon = "faugus-launcher"
+                icon = APP_ID  # Faugus X
 
             with open(autostart_path, "w") as f:
                 f.write(
                     "[Desktop Entry]\n"
                     "Type=Application\n"
-                    "Name=Faugus\n"
+                    "Name=Faugus X\n"
                     f"Exec={exec_cmd}{hide_arg}\n"
                     f"Icon={icon}\n"
                     "Categories=Game;\n"
-                    "StartupWMClass=faugus-launcher\n"
+                    f"StartupWMClass={APP_ID}\n"
                 )
         else:
             if os.path.exists(autostart_path):

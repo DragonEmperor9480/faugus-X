@@ -355,7 +355,7 @@ def main():
         theme_engine,
     )
 
-    app = Gtk.Application(application_id="io.github.Faugus.faugus-launcher")
+    app = Gtk.Application(application_id=APP_ID)  # Faugus X
 
     def on_activate(app):
         win = CreateShortcut(exec_path)

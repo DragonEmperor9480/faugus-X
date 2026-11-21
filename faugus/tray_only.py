@@ -7,7 +7,7 @@ import sys
 import gi
 from gi.repository import Gio, GLib
 
-from faugus.path_manager import APP_ID, CONFIG_FILE_DIR, RUNNING_GAMES, TRAY_BUS_NAME, TRAY_INTERFACE, TRAY_OBJECT_PATH, subprocess_env
+from faugus.path_manager import APP_ID, APP_OBJECT_PATH, CONFIG_FILE_DIR, RUNNING_GAMES, TRAY_BUS_NAME, TRAY_INTERFACE, TRAY_OBJECT_PATH, subprocess_env
 from faugus.tray_sni import TrayIcon
 
 TRAY_CONTROL_XML = f"""
@@ -100,7 +100,7 @@ def run_tray_entrypoint(launch_ui, console_mode=False):
         tray_connection = tray.connection
         if tray_connection:
             try:
-                action_group = Gio.DBusActionGroup.get(tray_connection, APP_ID, "/io/github/Faugus/faugus_launcher")
+                action_group = Gio.DBusActionGroup.get(tray_connection, APP_ID, APP_OBJECT_PATH)  # Faugus X
                 action_group.activate_action("quit", None)
             except GLib.Error:
                 pass
