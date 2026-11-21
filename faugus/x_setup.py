@@ -3,6 +3,7 @@
 - Showcase is the default interface and gamepad navigation is on. Users
   coming from Faugus get these once (each the first time Faugus X knows
   about it); they can change them later and Faugus X won't touch them again.
+- The GTK header bar is always off; its option is hidden in Settings.
 - Faugus X needs a SteamGridDB API key (banners, HD backdrops, logos).
   Without one, a window that can't be skipped asks for it: paste a key
   (checked online) or quit. It is checked again after Settings closes.
@@ -20,6 +21,10 @@ DEFAULTS = {
     "interface-mode": "Showcase",
     "gamepad-navigation": "True",
 }
+# Settings Faugus X always uses; their options are hidden in Settings.
+FORCED = {
+    "header-bar": "False",   # GTK header bar: not wanted on a full-screen console UI
+}
 KEY_URL = "https://www.steamgriddb.com/profile/preferences/api"
 API = "https://www.steamgriddb.com/api/v2"
 
@@ -34,6 +39,10 @@ CSS = """
 def prepare_first_run():
     """Apply Faugus X's defaults, each one only once. Run before the window is built."""
     cfg = ConfigManager()
+    forced = {key: value for key, value in FORCED.items() if cfg.config.get(key) != value}
+    if forced:
+        cfg.config.update(forced)
+        cfg.save_config()
     applied = cfg.config.get(APPLIED_KEY)
     if not isinstance(applied, list):
         applied = ["interface-mode"] if cfg.config.get(FIRST_RUN_KEY) == "True" else []
@@ -84,6 +93,7 @@ def _watch_settings(app, win):
 
     def __init__(self, *args, **kwargs):
         original_init(self, *args, **kwargs)
+        _hide_forced_options(self)
         _add_controller_option(self)
         _add_hero_buttons_option(self, win)
 
@@ -96,6 +106,14 @@ def _watch_settings(app, win):
 
     settings_cls.__init__ = __init__
     settings_cls._faugus_x_gate = True
+
+
+def _hide_forced_options(settings):
+    """Hide options for settings in FORCED (kept unticked so saving keeps them off)."""
+    check = getattr(settings, "checkbox_header_bar", None)
+    if check is not None:
+        check.set_active(False)
+        check.set_visible(False)
 
 
 def _add_hero_buttons_option(settings, win):
