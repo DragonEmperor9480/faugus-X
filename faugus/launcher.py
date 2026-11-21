@@ -3298,7 +3298,10 @@ class Main(Gtk.ApplicationWindow, HiDpiMixin):
             self.overview_panel = None
 
         scroll_box = self.scroll_box
-        if self.carrousel_active():
+        if self.carrousel_active() and getattr(self, "showcase_enabled", False):
+            from faugus.showcase import build_showcase
+            self.right_vbox.append(build_showcase(self, self.carrousel_box))
+        elif self.carrousel_active():
             self.right_vbox.append(self.wrap_content_with_position(self.carrousel_box, overview_panel))
         elif self.interface_mode in ("Covers", "Grid"):
             scroll_box.set_vexpand(False)
@@ -3964,6 +3967,11 @@ class Main(Gtk.ApplicationWindow, HiDpiMixin):
         self.mono_icon = cfg.config.get('mono-icon', 'False') == 'True'
         self.auto_close_on_launch = cfg.config.get('auto-close-on-launch', 'False') == 'True'
         self.interface_mode = cfg.config.get('interface-mode', '').strip('"')
+        # Faugus X: Showcase runs on the Carrousel engine with an extra layer (faugus/showcase.py)
+        self.interface_mode_config = self.interface_mode
+        self.showcase_enabled = self.interface_mode == "Showcase"
+        if self.showcase_enabled:
+            self.interface_mode = "Carrousel"
         self.background_mode = cfg.config.get('background-mode', 'default').strip('"')
         self.overview_color_mode = cfg.config.get('overview-color-mode', 'default').strip('"')
         self.widget_color_mode = cfg.config.get('widget-color-mode', 'default').strip('"')
@@ -4426,7 +4434,7 @@ class Main(Gtk.ApplicationWindow, HiDpiMixin):
             if self.apply_tray_settings(settings_dialog.checkbox_system_tray.get_active(), settings_dialog.checkbox_mono_icon.get_active()):
                 return
 
-            if (self.interface_mode != settings_dialog.combobox_interface.get_active_id()
+            if (getattr(self, "interface_mode_config", self.interface_mode) != settings_dialog.combobox_interface.get_active_id()
                     or self.background_mode != settings_dialog.combobox_background.get_active_id()
                     or self.widget_color_mode != settings_dialog.combobox_widget_color.get_active_id()
                     or self.theme_engine != settings_dialog.combobox_theme_engine.get_active_id()
@@ -5863,6 +5871,7 @@ class Settings(Gtk.Dialog):
         self.combobox_interface.append("Grid", _("Grid"))
         self.combobox_interface.append("Covers", _("Covers"))
         self.combobox_interface.append("Carrousel", _("Carrousel"))
+        self.combobox_interface.append("Showcase", _("Showcase"))
 
         self.label_background = Gtk.Label(label=_("Background Color"))
         self.label_background.set_halign(Gtk.Align.START)
@@ -6589,7 +6598,7 @@ class Settings(Gtk.Dialog):
     def on_combobox_interface_changed(self, combobox):
         active_id = combobox.get_active_id()
 
-        covers_or_carrousel = active_id in ("Covers", "Carrousel")
+        covers_or_carrousel = active_id in ("Covers", "Carrousel", "Showcase")
         not_list = active_id != "List"
 
         covers_carrousel_tip = _("Covers or Carrousel mode")
@@ -6606,7 +6615,7 @@ class Settings(Gtk.Dialog):
 
         self._refresh_banner_checkbox_sensitivity()
 
-        covers_carrousel_or_grid = active_id in ("Covers", "Carrousel", "Grid")
+        covers_carrousel_or_grid = active_id in ("Covers", "Carrousel", "Showcase", "Grid")
         covers_carrousel_grid_tip = _("Grid, Covers or Carrousel mode")
         self.label_grid_position.set_sensitive(covers_carrousel_or_grid)
         self.combobox_grid_position.set_sensitive(covers_carrousel_or_grid)
@@ -6662,7 +6671,7 @@ class Settings(Gtk.Dialog):
         open_uri(widget, "https://www.steamgriddb.com/profile/preferences/api")
 
     def _refresh_banner_checkbox_sensitivity(self):
-        covers_or_carrousel = self.combobox_interface.get_active_id() in ("Covers", "Carrousel")
+        covers_or_carrousel = self.combobox_interface.get_active_id() in ("Covers", "Carrousel", "Showcase")
         enabled = covers_or_carrousel and self.checkbox_steamgriddb.get_active()
         self.checkbox_banner.set_sensitive(enabled)
         self.checkbox_banner.set_tooltip_text(
