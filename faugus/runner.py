@@ -269,6 +269,13 @@ class FaugusRun:
 
         self.splash_allowed = self.splash_window_enabled and self.automatic_updates and not os.environ.get("DISABLE_UMU") and not os.environ.get("FAUGUS_DISABLE_UPDATES")
 
+        # Faugus X: report launch status to the Showcase launch screen instead of a splash window
+        from faugus.xbridge import bridge_for
+        bridge = bridge_for(self.gameid)
+        if bridge is not None:
+            self.splash_process = bridge
+            self.splash_allowed = True
+
         if self.command == "winetricks":
             GLib.idle_add(self.show_log_window)
 
