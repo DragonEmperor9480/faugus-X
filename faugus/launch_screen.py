@@ -357,9 +357,9 @@ class LaunchScreen:
                 pass
 
     def _set_logo(self, game):
-        from faugus.logos import cached_logo
-        path = cached_logo(game.gameid)
-        texture = None
+        from faugus.logos import cached_logo, logo_texture
+        texture = logo_texture(game.gameid)
+        path = cached_logo(game.gameid) if texture is None else None
         if path:
             try:
                 texture = load_full_texture(path)
@@ -378,7 +378,8 @@ class LaunchScreen:
 
     def _set_banner(self, game):
         self.banner.set_paintable(None)
-        path = f"{BANNERS_DIR}/{game.gameid}.png"
+        from faugus.hd_banners import cached_hd
+        path = cached_hd(game.gameid) or f"{BANNERS_DIR}/{game.gameid}.png"
         if not os.path.isfile(path):
             path = game.cover if os.path.isfile(game.cover) else None
         if path:
