@@ -21,7 +21,9 @@ The window keeps interface_mode == "Carrousel" internally; `showcase_enabled`
 marks that this layer is active. See the small hooks in launcher.py.
 """
 
+import math
 import os
+import time
 from datetime import datetime
 
 import gi
@@ -30,19 +32,35 @@ gi.require_version("Gtk", "4.0")
 gi.require_version("Adw", "1")
 from gi.repository import Adw, Gdk, GLib, Graphene, Gtk, Pango
 
-from faugus.utils import HiDpiPaintable, add_css_once, new_icon_image, new_picture, play_ui_sound
+from faugus.backdrop import Backdrop
+from faugus.logos import cached_logo, request_logo
+from faugus.utils import HiDpiPaintable, add_css_once, load_full_texture, new_icon_image, new_picture, play_ui_sound
 
 # `_` (gettext) is installed into builtins by launcher.py's setup_gettext().
 
 HERO_SLIDE_PX = 48
 HERO_ANIM_MS = 420
 SCROLL_ANIM_MS = 520
-BANNER_FADE_MS = 450
 TILE_W, TILE_H = 168, 252
+LOGO_MAX_W, LOGO_MAX_H = 540, 150
+CAPTION_LOGO_MAX_W, CAPTION_LOGO_MAX_H = 420, 130
+IDLE_SECONDS = int(os.environ.get("FAUGUS_X_IDLE_SECONDS", "45"))  # env override for testing
+ATTRACT_SLIDE_SECONDS = 12
+ATTRACT_FADE_OUT_MS = 1500
+ATTRACT_FADE_IN_MS = 350
 
 SHOWCASE_CSS = """
-.showcase-hero {
-    background-image: linear-gradient(to right, alpha(black, 0.55), alpha(black, 0.15) 45%, transparent 70%);
+.showcase-attract-hint {
+    color: alpha(white, 0.55);
+    font-size: 14px;
+    letter-spacing: 2px;
+    text-shadow: 0 1px 4px alpha(black, 0.8);
+}
+.showcase-attract-title {
+    color: white;
+    font-size: 36px;
+    font-weight: 800;
+    text-shadow: 0 2px 8px alpha(black, 0.8);
 }
 .showcase-brand {
     font-weight: 800;
@@ -174,6 +192,19 @@ flowboxchild.showcase-current .showcase-tile {
 """
 
 
+def _fixed_holder(picture):
+    """Hold a picture at its exact size.
+
+    A Gtk.Picture answers height-for-width by keeping its aspect ratio, so a
+    vertical box measuring it at full screen width gets a huge height and the
+    hero layout overflows. Gtk.Fixed measures children without a for-size.
+    """
+    holder = Gtk.Fixed()
+    holder.set_halign(Gtk.Align.START)
+    holder.put(picture, 0, 0)
+    return holder
+
+
 class Showcase:
     def __init__(self, win):
         self.win = win
@@ -182,10 +213,18 @@ class Showcase:
         self._scroll_anim = None
         self._library_key = None
         self._tiles = {}
+        self.attracting = False
+        self._last_activity = time.monotonic()
+        self._last_pointer = None
+        self._attract_slide_id = None
+        self._attract_anim = None
+        self._attract_index = 0
 
         add_css_once("showcase", SHOWCASE_CSS, Gtk.STYLE_PROVIDER_PRIORITY_USER + 1)
+        self.backdrop = Backdrop()
         self._build()
         self._install_hooks()
+        self._setup_attract()
         self._tick_clock()
         GLib.timeout_add_seconds(15, self._tick_clock)
 
@@ -199,9 +238,17 @@ class Showcase:
         self.scroller.set_kinetic_scrolling(True)
         self.vadj = self.scroller.get_vadjustment()
         self.vadj.connect("notify::page-size", lambda *_: self._fit_hero())
+        self.vadj.connect("value-changed", lambda *_: self._on_scrolled())
 
         content = Gtk.Box(orientation=Gtk.Orientation.VERTICAL)
         self.scroller.set_child(content)
+
+        # Root: animated banner backdrop, the scrolling UI on top, and the
+        # attract-mode caption above everything.
+        self.root = Gtk.Overlay()
+        self.root.set_child(self.backdrop.widget)
+        self.root.add_overlay(self.scroller)
+        self.root.add_overlay(self._build_attract_caption())
 
         # ---- hero page: fills exactly one screen
         self.hero_page = Gtk.Box(orientation=Gtk.Orientation.VERTICAL)
@@ -249,7 +296,23 @@ class Showcase:
         self.title.add_css_class("showcase-title")
         self.title.set_ellipsize(Pango.EllipsizeMode.END)
         self.title.set_max_width_chars(40)
-        self.hero_info.append(self.title)
+
+        self.logo = Gtk.Picture()
+        self.logo.set_content_fit(Gtk.ContentFit.CONTAIN)
+        self.logo.set_can_shrink(True)
+        self.logo.set_halign(Gtk.Align.START)
+
+        # The game's SteamGridDB logo when we have one, its text title otherwise.
+        self.title_stack = Gtk.Stack()
+        self.title_stack.set_transition_type(Gtk.StackTransitionType.CROSSFADE)
+        self.title_stack.set_transition_duration(300)
+        self.title_stack.set_hhomogeneous(False)
+        self.title_stack.set_vhomogeneous(False)
+        self.title_stack.set_margin_bottom(6)
+        self.title_stack.set_halign(Gtk.Align.START)
+        self.title_stack.add_named(self.title, "text")
+        self.title_stack.add_named(_fixed_holder(self.logo), "logo")
+        self.hero_info.append(self.title_stack)
 
         self.meta = Gtk.Label(xalign=0)
         self.meta.add_css_class("showcase-meta")
@@ -412,15 +475,11 @@ class Showcase:
             self.carrousel_slot.append(carrousel_box)
         carrousel_box.set_valign(Gtk.Align.END)
 
-        parent = self.scroller.get_parent()
+        parent = self.root.get_parent()
         if parent is not None:
-            parent.remove(self.scroller)
+            parent.remove(self.root)
 
-        stack_banner = getattr(self.win, "stack_banner", None)
-        if stack_banner is not None:
-            stack_banner.set_transition_duration(BANNER_FADE_MS)
-
-        return self.scroller
+        return self.root
 
     def _fit_hero(self):
         page = int(self.vadj.get_page_size())
@@ -454,6 +513,9 @@ class Showcase:
             self.refresh_hero()
 
         win.render_carrousel = render_carrousel
+
+        # Showcase draws its own full-screen backdrop; skip Faugus' banner work.
+        win.update_background = lambda *args, **kwargs: None
 
         keys = Gtk.EventControllerKey()
         keys.set_propagation_phase(Gtk.PropagationPhase.CAPTURE)
@@ -497,8 +559,11 @@ class Showcase:
         if game is None:
             self.hero_info.set_visible(False)
             self._hero_gameid = None
+            self.backdrop.show_game(None)
             return
         self.hero_info.set_visible(True)
+        if not self.attracting:
+            self.backdrop.show_game(game)
 
         running = game.gameid in self.win.running
         self.play_button.set_label(_("Stop") if running else _("Play"))
@@ -516,7 +581,47 @@ class Showcase:
         self._hero_gameid = game.gameid
         self.title.set_text(game.title)
         self.meta.set_text(self._meta_text(game))
+        self._show_title_or_logo(game)
         self._animate_hero_in()
+
+    # ------------------------------------------------------------------ logos
+
+    @staticmethod
+    def _load_logo(path, max_w, max_h):
+        try:
+            texture = load_full_texture(path)
+        except GLib.Error:
+            return None, 0, 0
+        w, h = texture.get_width(), texture.get_height()
+        if not w or not h:
+            return None, 0, 0
+        scale = min(max_w / w, max_h / h)
+        return texture, int(w * scale), int(h * scale)
+
+    def _show_title_or_logo(self, game):
+        path = cached_logo(game.gameid)
+        if path is None:
+            self.title_stack.set_visible_child_name("text")
+            request_logo(game, lambda p, gid=game.gameid: self._on_logo_ready(gid))
+            return
+        self._apply_logo(path)
+
+    def _apply_logo(self, path):
+        texture, w, h = self._load_logo(path, LOGO_MAX_W, LOGO_MAX_H)
+        if texture is None:
+            self.title_stack.set_visible_child_name("text")
+            return
+        # HiDpiPaintable reports w x h as the natural size, so GTK doesn't
+        # lay the logo out at its (often >1000 px) native resolution.
+        self.logo.set_paintable(HiDpiPaintable(texture, w, h))
+        self.logo.set_size_request(w, h)
+        self.title_stack.set_visible_child_name("logo")
+
+    def _on_logo_ready(self, gameid):
+        if gameid == self._hero_gameid:
+            path = cached_logo(gameid)
+            if path:
+                self._apply_logo(path)
 
     def _meta_text(self, game):
         win = self.win
@@ -588,6 +693,7 @@ class Showcase:
         )
         for game in games:
             self.grid.append(self._build_tile(game))
+            request_logo(game)  # warm the logo cache in the background
         if self._hero_gameid:
             self._mark_current_tile(self._hero_gameid)
 
@@ -780,6 +886,8 @@ class Showcase:
         )
 
     def _on_window_key(self, _controller, keyval, _keycode, state):
+        if self.note_activity():
+            return True  # the key that wakes attract mode does nothing else
         if keyval == Gdk.KEY_F11:
             self.toggle_fullscreen()
             return True
@@ -793,6 +901,206 @@ class Showcase:
                 self.toggle_search(False)
                 return True
         return False
+
+    # ------------------------------------------------------------------ attract mode
+
+    def _build_attract_caption(self):
+        box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=14)
+        box.set_halign(Gtk.Align.START)
+        box.set_valign(Gtk.Align.END)
+        box.set_margin_start(80)
+        box.set_margin_bottom(70)
+        box.set_can_target(False)
+        box.set_opacity(0.0)
+
+        self.caption_logo = Gtk.Picture()
+        self.caption_logo.set_content_fit(Gtk.ContentFit.CONTAIN)
+        self.caption_logo.set_halign(Gtk.Align.START)
+        self.caption_title = Gtk.Label(xalign=0)
+        self.caption_title.add_css_class("showcase-attract-title")
+        self.caption_stack = Gtk.Stack()
+        self.caption_stack.set_transition_type(Gtk.StackTransitionType.CROSSFADE)
+        self.caption_stack.set_transition_duration(700)
+        self.caption_stack.set_hhomogeneous(False)
+        self.caption_stack.set_vhomogeneous(False)
+        self.caption_stack.set_halign(Gtk.Align.START)
+        self.caption_stack.add_named(self.caption_title, "text")
+        self.caption_stack.add_named(_fixed_holder(self.caption_logo), "logo")
+        box.append(self.caption_stack)
+
+        hint = Gtk.Label(label=_("PRESS ANY BUTTON"), xalign=0)
+        hint.add_css_class("showcase-attract-hint")
+        box.append(hint)
+
+        self.attract_caption = box
+        return box
+
+    def _setup_attract(self):
+        win = self.win
+
+        motion = Gtk.EventControllerMotion()
+        motion.connect("motion", self._on_pointer_motion)
+        win.add_controller(motion)
+
+        scroll = Gtk.EventControllerScroll()
+        scroll.set_flags(Gtk.EventControllerScrollFlags.BOTH_AXES)
+        scroll.set_propagation_phase(Gtk.PropagationPhase.CAPTURE)
+        scroll.connect("scroll", lambda *_: self.note_activity())
+        win.add_controller(scroll)
+
+        click = Gtk.GestureClick()
+        click.set_button(0)
+        click.set_propagation_phase(Gtk.PropagationPhase.CAPTURE)
+        click.connect("pressed", self._on_any_click)
+        win.add_controller(click)
+
+        self._hook_gamepad_activity()
+        GLib.timeout_add_seconds(2, self._check_idle)
+
+    def _hook_gamepad_activity(self):
+        try:
+            import faugus.gamepad as gamepad
+            from gi.repository import Manette
+        except Exception:
+            return
+        original = getattr(gamepad, "_on_device_event", None)
+        if original is None or getattr(original, "_faugus_x_wrapped", False):
+            return
+
+        def on_device_event(window, event):
+            showcase = getattr(window, "showcase", None)
+            if showcase is not None and showcase.note_gamepad_event(event, Manette):
+                return None  # swallow the input that wakes attract mode
+            return original(window, event)
+
+        on_device_event._faugus_x_wrapped = True
+        gamepad._on_device_event = on_device_event
+
+    def note_gamepad_event(self, event, Manette):
+        kind = event.get_event_type()
+        if kind == Manette.EventType.EVENT_BUTTON_RELEASE:
+            return False
+        if kind == Manette.EventType.EVENT_ABSOLUTE:
+            ok, _axis, value = event.get_absolute()
+            if not ok or abs(value) < 0.5:
+                return False  # ignore stick noise
+        return self.note_activity()
+
+    def note_activity(self):
+        """Record user input. Returns True if this input woke attract mode."""
+        self._last_activity = time.monotonic()
+        if self.attracting:
+            self.exit_attract()
+            return True
+        return False
+
+    def _on_pointer_motion(self, _controller, x, y):
+        last = self._last_pointer
+        self._last_pointer = (x, y)
+        if last is not None and math.hypot(x - last[0], y - last[1]) < 4:
+            return  # synthetic or jitter motion
+        if last is not None:
+            self.note_activity()
+
+    def _on_any_click(self, gesture, *_args):
+        if self.note_activity():
+            gesture.set_state(Gtk.EventSequenceState.CLAIMED)
+
+    def _attract_allowed(self):
+        win = self.win
+        if not win.is_active() or self.launch_screen.root.get_visible():
+            return False
+        if self.search_revealer.get_reveal_child():
+            return False
+        menu = getattr(win, "context_menu", None)
+        if menu is not None and menu.get_visible():
+            return False
+        app = win.get_application()
+        if app is not None and len([w for w in app.get_windows() if w.get_visible()]) > 1:
+            return False  # a dialog (settings, edit game, ...) is open
+        return True
+
+    def _check_idle(self):
+        if not self.attracting and time.monotonic() - self._last_activity >= IDLE_SECONDS:
+            if self._attract_allowed():
+                self.enter_attract()
+            else:
+                self._last_activity = time.monotonic()
+        return True
+
+    def _fade_ui(self, target, duration, done=None):
+        if self._attract_anim is not None:
+            self._attract_anim.pause()
+        start = self.scroller.get_opacity()
+        caption_start = self.attract_caption.get_opacity()
+        caption_target = 1.0 - target
+
+        def step(value):
+            self.scroller.set_opacity(start + (target - start) * value)
+            self.attract_caption.set_opacity(caption_start + (caption_target - caption_start) * value)
+
+        anim = Adw.TimedAnimation.new(self.root, 0.0, 1.0, duration, Adw.CallbackAnimationTarget.new(step))
+        anim.set_easing(Adw.Easing.EASE_IN_OUT_CUBIC)
+        if done is not None:
+            anim.connect("done", lambda *_: done())
+        self._attract_anim = anim
+        anim.play()
+
+    def enter_attract(self):
+        self.attracting = True
+        self.scroller.set_can_target(False)
+        self.win.set_cursor_from_name("none")
+
+        games = [g for g in self.win.games if Backdrop.has_art(g)]
+        selected = self.win.selected()
+        ids = [g.gameid for g in games]
+        self._attract_index = ids.index(selected.gameid) if selected and selected.gameid in ids else 0
+        self._set_caption(games[self._attract_index] if games else selected)
+        self._fade_ui(0.0, ATTRACT_FADE_OUT_MS)
+
+        if len(games) > 1:
+            def next_slide():
+                if not self.attracting:
+                    return False
+                current = [g for g in self.win.games if Backdrop.has_art(g)]
+                if not current:
+                    return True
+                self._attract_index = (self._attract_index + 1) % len(current)
+                game = current[self._attract_index]
+                self.backdrop.show_game(game)
+                self._set_caption(game)
+                return True
+
+            self._attract_slide_id = GLib.timeout_add_seconds(ATTRACT_SLIDE_SECONDS, next_slide)
+
+    def exit_attract(self):
+        self.attracting = False
+        if self._attract_slide_id is not None:
+            GLib.source_remove(self._attract_slide_id)
+            self._attract_slide_id = None
+        self.win.set_cursor(None)
+        self.scroller.set_can_target(True)
+        game = self.win.selected()
+        if game is not None:
+            self.backdrop.show_game(game)
+        self._fade_ui(1.0, ATTRACT_FADE_IN_MS)
+
+    def _set_caption(self, game):
+        if game is None:
+            return
+        self.caption_title.set_text(game.title)
+        path = cached_logo(game.gameid)
+        texture, w, h = self._load_logo(path, CAPTION_LOGO_MAX_W, CAPTION_LOGO_MAX_H) if path else (None, 0, 0)
+        if texture is not None:
+            self.caption_logo.set_paintable(HiDpiPaintable(texture, w, h))
+            self.caption_logo.set_size_request(w, h)
+            self.caption_stack.set_visible_child_name("logo")
+        else:
+            self.caption_stack.set_visible_child_name("text")
+
+    def _on_scrolled(self):
+        page = self.vadj.get_page_size() or 1
+        self.backdrop.set_dim(0.6 * min(1.0, self.vadj.get_value() / page))
 
     # ------------------------------------------------------------------ misc
 

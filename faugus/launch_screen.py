@@ -32,6 +32,7 @@ from faugus.utils import HiDpiPaintable, add_css_once, load_full_texture, new_pi
 from faugus.xbridge import STATUS_DIR_ENV, read_status
 
 COVER_W, COVER_H = 260, 390
+LOGO_MAX_W, LOGO_MAX_H = 520, 150
 ENTER_MS = 550
 EXIT_MS = 600
 ZOOM_SECONDS = 14.0
@@ -164,6 +165,13 @@ class LaunchScreen:
         self.title.set_max_width_chars(40)
         center.append(self.title)
 
+        self.logo = Gtk.Picture()
+        self.logo.set_content_fit(Gtk.ContentFit.CONTAIN)
+        self.logo.set_halign(Gtk.Align.CENTER)
+        self.logo.set_margin_top(18)
+        self.logo.set_visible(False)
+        center.append(self.logo)
+
         self.status = Gtk.Label()
         self.status.add_css_class("launch-status")
         center.append(self.status)
@@ -240,6 +248,7 @@ class LaunchScreen:
         self._waiting_window = False
 
         self.title.set_text(game.title)
+        self._set_logo(game)
         self.status.set_text(_("Starting…"))
         self.progress.set_fraction(0.0)
         self._set_cover(game)
@@ -257,6 +266,7 @@ class LaunchScreen:
                 f".launch-cover {{ transform: translateY({lift:.1f}px) scale({scale:.4f}); }}".encode()
             )
             self.title.set_opacity(max(0.0, (value - 0.35) / 0.65))
+            self.logo.set_opacity(max(0.0, (value - 0.35) / 0.65))
             self.status.set_opacity(max(0.0, (value - 0.5) / 0.5))
 
         self._play(enter, ENTER_MS, Adw.Easing.EASE_OUT_BACK)
@@ -345,6 +355,26 @@ class LaunchScreen:
                 self.cover.set_paintable(load_full_texture(game.icon))
             except GLib.Error:
                 pass
+
+    def _set_logo(self, game):
+        from faugus.logos import cached_logo
+        path = cached_logo(game.gameid)
+        texture = None
+        if path:
+            try:
+                texture = load_full_texture(path)
+            except GLib.Error:
+                texture = None
+        if texture is None or not texture.get_width() or not texture.get_height():
+            self.logo.set_visible(False)
+            self.title.set_visible(True)
+            return
+        scale = min(LOGO_MAX_W / texture.get_width(), LOGO_MAX_H / texture.get_height())
+        w, h = int(texture.get_width() * scale), int(texture.get_height() * scale)
+        self.logo.set_paintable(HiDpiPaintable(texture, w, h))
+        self.logo.set_size_request(w, h)
+        self.logo.set_visible(True)
+        self.title.set_visible(False)
 
     def _set_banner(self, game):
         self.banner.set_paintable(None)
