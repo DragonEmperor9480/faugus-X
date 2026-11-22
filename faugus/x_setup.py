@@ -105,6 +105,7 @@ def _watch_settings(app, win):
         _hide_forced_options(self)
         _add_controller_option(self)
         _add_hero_buttons_option(self, win)
+        _add_tilt_option(self, win)
 
         def recheck(*_a):
             GLib.timeout_add(400, lambda: (require_steamgriddb(app, app.get_active_window() or win), False)[1])
@@ -152,6 +153,48 @@ def _add_hero_buttons_option(settings, win):
         live = getattr(win, "showcase", None)
         if live is not None:
             live.set_hero_buttons(visible)
+
+    settings.connect("response", on_response)
+
+
+def _add_tilt_option(settings, win):
+    """Settings → Interface: move the Showcase background when the controller is tilted."""
+    from faugus import tilt
+    combo = getattr(settings, "combobox_interface", None)
+    grid = combo.get_parent() if combo is not None else None
+    if not isinstance(grid, Gtk.Grid):
+        return
+    check = Gtk.CheckButton(label=_("Tilt effect: move the background when you tilt the controller"))
+    check.set_tooltip_text(_("For controllers with motion sensors (DualShock 4, DualSense, Switch Pro). "
+                             "Xbox controllers have none."))
+    check.set_active(tilt.is_enabled())
+    hint = Gtk.Label(xalign=0, wrap=True, max_width_chars=50)
+    hint.add_css_class("dim-label")
+    hint.set_label(_("Your controller's motion sensors can't be read yet. "
+                     "Install the udev rule from the Faugus X README, then reconnect the controller."))
+    grid.attach(check, 0, 3, 1, 1)
+    grid.attach(hint, 0, 4, 1, 1)
+    settings.checkbox_tilt = check
+
+    def sync(*_a):
+        check.set_sensitive(combo.get_active_id() == "Showcase")
+        readable, unreadable = tilt.motion_devices()
+        hint.set_visible(check.get_active() and not readable and bool(unreadable))
+
+    combo.connect("changed", sync)
+    check.connect("toggled", sync)
+    sync()
+
+    def on_response(_dialog, response_id):
+        if response_id != Gtk.ResponseType.OK:
+            return
+        enabled = check.get_active()
+        cfg = ConfigManager()
+        cfg.config[tilt.CONFIG_KEY] = str(enabled)
+        cfg.save_config()
+        live = getattr(win, "showcase", None)
+        if live is not None:
+            live.set_tilt(enabled)
 
     settings.connect("response", on_response)
 

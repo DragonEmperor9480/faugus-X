@@ -1,0 +1,9 @@
+# Faugus X: let the logged-in user read the motion sensors (accelerometer +
+# gyro) of PlayStation and Nintendo controllers, like the controller itself.
+# Used by Showcase's tilt effect, and by games that read gyro through SDL
+# (e.g. Proton with PROTON_DISABLE_HIDRAW=1).
+# DualShock 4 / DualSense (and DS4-mode clones) use Sony's vendor ID 054c;
+# Switch Pro and Joy-Cons use Nintendo's 057e.
+# Must sort before 73-seat-late.rules, which turns the uaccess tag into an ACL.
+SUBSYSTEM=="input", KERNEL=="event*", ENV{ID_INPUT_ACCELEROMETER}=="1", ATTRS{id/vendor}=="054c", TAG+="uaccess"
+SUBSYSTEM=="input", KERNEL=="event*", ENV{ID_INPUT_ACCELEROMETER}=="1", ATTRS{id/vendor}=="057e", TAG+="uaccess"

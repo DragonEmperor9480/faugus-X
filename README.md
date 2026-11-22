@@ -25,6 +25,11 @@ A new **Showcase** interface mode, next to Faugus' List, Grid, Covers and Carrou
 - Games without a banner use their cover, blurred.
 - **HD banners:** Faugus stores banners at 1920×620, which looks soft when stretched to a full screen. Faugus X downloads the full-resolution (3840×1240) copy of *the same banner* from SteamGridDB, matched by comparing images, so your chosen banner is respected.
 
+### Tilt effect
+With a controller that has motion sensors (DualShock 4, DualSense, Switch Pro and compatible), tilting it gives the home screen a sense of depth: the backdrop moves one way and the game's logo slightly the other, while the carousel stays put. It follows how you *tilt* the controller, not how you hold it, so it settles back to the middle when you stop moving. Turn it on in **Settings → Interface → Tilt effect**. It only reads the sensors while Faugus X is the focused window, never during a game. Xbox controllers have no motion sensors.
+
+Linux only lets root read a controller's motion sensors by default, so the tilt effect needs a small udev rule (see [Controller motion sensors](#controller-motion-sensors)).
+
 ### Game logos
 - Each game shows its **transparent logo** from SteamGridDB instead of plain text, in the hero, on the launch screen and in attract mode.
 - **Change logo** in the game's edit window: a new **Logo** slot under the banner opens a searchable SteamGridDB logo picker. Right-click it to load a logo from a file, use the text title instead, or go back to automatic.
@@ -113,6 +118,14 @@ cd faugus-X
 python3 -m faugus.launcher
 ```
 
+### Controller motion sensors
+The tilt effect, and gyro aiming in games that read it through SDL (for example Proton with `PROTON_DISABLE_HIDRAW=1`), need read access to the controller's motion sensors. Linux doesn't give it by default. Package installs (`makepkg`) and `--system` installs add the udev rule for you. After a user install, add it once:
+```
+sudo install -m 644 packaging/faugus-x/70-faugus-x-controller-motion.rules /etc/udev/rules.d/
+sudo udevadm control --reload && sudo udevadm trigger --subsystem-match=input --action=change
+```
+Then turn the controller off and on. The rule covers PlayStation (and DS4-mode compatible) and Nintendo controllers, and only gives access to the user logged in at the screen, just like the controller's buttons.
+
 ### First start
 - **A SteamGridDB API key is required.** Faugus X relies on SteamGridDB for banners, HD backgrounds and logos. On first start it asks for your free [API key](https://www.steamgriddb.com/profile/preferences/api) and checks it with SteamGridDB before continuing. It asks again if SteamGridDB is turned off in Settings.
 - **Showcase is the default interface.** If you used Faugus before, Faugus X switches you to Showcase once on its first start. You can still pick List, Grid, Covers or Carrousel in **Settings → Interface → Interface Mode**.
@@ -162,8 +175,9 @@ faugus/artwork_wait.py     wait for artwork downloads when adding a game
 faugus/xbridge.py          launch status from the runner to the launch screen
 faugus/x_setup.py          first-run defaults and the SteamGridDB requirement
 faugus/power_menu.py       power menu (sleep, restart, shut down, log out)
+faugus/tilt.py             controller tilt for the parallax effect
 faugus/controller_watch.py open Faugus X when a controller connects
-packaging/faugus-x/        installer and PKGBUILD
+packaging/faugus-x/        installer, PKGBUILD and the motion sensor udev rule
 ```
 
 Faugus' own files only have small, commented changes: the Showcase mode and two startup calls in `launcher.py`, a few lines in `runner.py` for the launch status, and the separate app ID and settings file in `path_manager.py` (plus one-line ID fixes in `tray_only.py`, `shortcut.py` and the autostart entry, and a `--controller-watch` line in the `faugus-launcher` script).

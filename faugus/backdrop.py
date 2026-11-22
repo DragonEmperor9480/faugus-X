@@ -164,6 +164,8 @@ class Backdrop:
         # carrousel sliding). The drift then holds still so GTK only redraws
         # the moving part instead of the whole screen — a big saving on iGPUs.
         self.pause_when = None
+        # Extra offset in pixels from the controller tilt effect (set by Showcase).
+        self.tilt_px = (0.0, 0.0)
         self.widget.add_tick_callback(self._on_tick)
 
     # ------------------------------------------------------------------ public
@@ -297,8 +299,8 @@ class Backdrop:
             settle = 1.0 - min(1.0, t / SETTLE_SECONDS)
             settle = settle * settle * settle
             scale = BASE_ZOOM + DRIFT_ZOOM * drift + SETTLE_ZOOM * settle
-            tx = DRIFT_X_PX * math.sin(2 * math.pi * t / 58.0 + s)
-            ty = DRIFT_Y_PX * math.sin(2 * math.pi * t / 47.0 + s * 0.7)
+            tx = DRIFT_X_PX * math.sin(2 * math.pi * t / 58.0 + s) + self.tilt_px[0]
+            ty = DRIFT_Y_PX * math.sin(2 * math.pi * t / 47.0 + s * 0.7) + self.tilt_px[1]
             layer.set_transform(scale, tx, ty)
         return GLib.SOURCE_CONTINUE
 

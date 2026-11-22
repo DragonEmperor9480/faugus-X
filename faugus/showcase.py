@@ -263,6 +263,39 @@ def hero_buttons_enabled():
     return ConfigManager().config.get(HERO_BUTTONS_KEY, "True") != "False"
 
 
+# Controller tilt parallax: the backdrop (far) moves against the tilt, the
+# hero logo and info (near) move with it, the carousel stays put.
+BACKDROP_TILT_X = 0.018   # fraction of the screen width at full tilt
+BACKDROP_TILT_Y = 0.016   # fraction of the screen height
+HERO_TILT_X_PX = 14
+HERO_TILT_Y_PX = 8
+
+
+class _Shift(Gtk.Widget):
+    """Draw a child offset by a few pixels without relayout (for parallax)."""
+
+    __gtype_name__ = "FaugusXShift"
+
+    def __init__(self, child):
+        super().__init__()
+        self.set_layout_manager(Gtk.BinLayout())
+        self._offset = (0.0, 0.0)
+        child.set_parent(self)
+        self._child = child
+
+    def set_offset(self, x, y):
+        offset = (round(x, 1), round(y, 1))
+        if offset != self._offset:
+            self._offset = offset
+            self.queue_draw()
+
+    def do_snapshot(self, snapshot):
+        x, y = self._offset
+        if x or y:
+            snapshot.translate(Graphene.Point().init(x, y))
+        self.snapshot_child(self._child, snapshot)
+
+
 def _fixed_holder(picture):
     """Hold a picture at its exact size.
 
@@ -298,6 +331,7 @@ class Showcase:
         self._build()
         self._install_hooks()
         self._setup_attract()
+        self._setup_tilt()
         self._tick_clock()
         GLib.timeout_add_seconds(15, self._tick_clock)
 
@@ -410,7 +444,8 @@ class Showcase:
         self.hero_info.append(actions)
         self.set_hero_buttons(hero_buttons_enabled())
 
-        self.hero_page.append(self.hero_info)
+        self.hero_shift = _Shift(self.hero_info)
+        self.hero_page.append(self.hero_shift)
 
         self.carrousel_slot = Gtk.Box(orientation=Gtk.Orientation.VERTICAL)
         self.carrousel_slot.set_margin_top(8)
@@ -566,6 +601,46 @@ class Showcase:
             parent.remove(self.root)
 
         return self.root
+
+    # ------------------------------------------------------------------ tilt
+
+    def _setup_tilt(self):
+        from faugus import tilt
+        self._tilt = None
+        self._tilt_tick = None
+        self._tilt_enabled = tilt.is_enabled()
+        self.win.connect("notify::is-active", lambda *_a: self._sync_tilt())
+        self._sync_tilt()
+
+    def set_tilt(self, enabled):
+        self._tilt_enabled = enabled
+        self._sync_tilt()
+
+    def _sync_tilt(self):
+        """Read the sensors only while the option is on and Faugus X is focused."""
+        if self._tilt_enabled and self.win.is_active():
+            if self._tilt is None:
+                from faugus.tilt import Tilt
+                self._tilt = Tilt()
+            self._tilt.set_active(True)
+            if self._tilt_tick is None:
+                self._tilt_tick = self.root.add_tick_callback(self._on_tilt_tick)
+        elif self._tilt is not None:
+            self._tilt.set_active(False)   # eases back to the centre, then stops
+
+    def _on_tilt_tick(self, *_args):
+        x, y = self._tilt.offset()
+        width, height = self.root.get_width(), self.root.get_height()
+        # x > 0: right side down; y > 0: top tipped away. Like things sliding
+        # downhill, the near layer moves towards the lowered edge.
+        self.backdrop.tilt_px = (-x * width * BACKDROP_TILT_X, y * height * BACKDROP_TILT_Y)
+        self.hero_shift.set_offset(x * HERO_TILT_X_PX, -y * HERO_TILT_Y_PX)
+        if not self._tilt.active() and abs(x) < 0.002 and abs(y) < 0.002:
+            self.backdrop.tilt_px = (0.0, 0.0)
+            self.hero_shift.set_offset(0, 0)
+            self._tilt_tick = None
+            return GLib.SOURCE_REMOVE
+        return GLib.SOURCE_CONTINUE
 
     def set_hero_buttons(self, visible):
         """Show or hide the hero's Play and ⋯ buttons (the carousel does both anyway)."""
