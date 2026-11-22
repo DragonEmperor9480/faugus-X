@@ -1,0 +1,80 @@
+# Faugus X: build the faugus-x-git Arch package (packaging/faugus-x/PKGBUILD).
+#
+# - every push / pull request to faugus-x: build it, so packaging problems
+#   show up as a failed check, and upload the package as a download
+# - a published GitHub release: also attach the package to the release
+#
+# Separate from Faugus' own workflows (which build Faugus Launcher), so
+# merging from upstream never conflicts.
+
+name: Faugus X package
+
+on:
+  push:
+    branches: [faugus-x]
+  pull_request:
+    branches: [faugus-x]
+  release:
+    types: [published]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: faugus-x-package-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  arch:
+    runs-on: ubuntu-latest
+    container: archlinux:base-devel
+    steps:
+      - name: Install git and the GitHub CLI
+        run: pacman -Syu --noconfirm --needed git github-cli
+
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0   # pkgver counts commits
+
+      - name: Build faugus-x-git from this commit
+        run: |
+          # makepkg refuses to run as root; let the build user install dependencies.
+          useradd -m builder
+          echo 'builder ALL=(ALL) NOPASSWD: ALL' > /etc/sudoers.d/builder
+
+          mkdir -p /build
+          cp -a "$GITHUB_WORKSPACE" /build/repo
+          COMMIT=$(git -C "$GITHUB_WORKSPACE" rev-parse HEAD)
+          cp packaging/faugus-x/PKGBUILD /build/PKGBUILD
+          # Build exactly this commit instead of the branch on GitHub.
+          sed -i "s|^source=.*|source=(\"faugus-x::git+file:///build/repo#commit=${COMMIT}\")|" /build/PKGBUILD
+          chown -R builder:builder /build
+
+          su builder -c "git config --global --add safe.directory '*' && cd /build && makepkg -s --noconfirm"
+          ls -l /build/*.pkg.tar.*
+
+      - name: Check the package contents
+        run: |
+          PKG=$(ls /build/*.pkg.tar.* | head -1)
+          bsdtar -tf "$PKG" > /tmp/files
+          for f in usr/bin/faugus-x usr/lib/faugus-x/faugus/launcher.py \
+                   usr/share/applications/io.github.DragonEmperor9480.faugus-x.desktop \
+                   usr/lib/udev/rules.d/70-faugus-x-controller-motion.rules; do
+            grep -qx "$f" /tmp/files || { echo "Missing from package: $f" >&2; exit 1; }
+          done
+          echo "Package contents look right."
+
+      - name: Upload package
+        uses: actions/upload-artifact@v7
+        with:
+          name: faugus-x-arch-package
+          path: /build/*.pkg.tar.*
+
+      - name: Attach to release
+        if: github.event_name == 'release'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release upload "${{ github.event.release.tag_name }}" /build/*.pkg.tar.* \
+            --clobber --repo "${{ github.repository }}"

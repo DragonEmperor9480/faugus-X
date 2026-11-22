@@ -163,5 +163,8 @@ if [ -z "$UDEVDIR" ] && [ ! -f "/etc/udev/rules.d/$RULES" ] && [ ! -f "/usr/lib/
 fi
 case ":$PATH:" in
 	*":$BINDIR:"*) ;;
-	*) [ -z "$DESTDIR" ] && echo "Note: $BINDIR is not in your PATH, so use the app menu or $BINDIR/faugus-x." ;;
+	*)
+		if [ -z "$DESTDIR" ]; then
+			echo "Note: $BINDIR is not in your PATH, so use the app menu or $BINDIR/faugus-x."
+		fi ;;
 esac
