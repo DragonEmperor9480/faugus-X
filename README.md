@@ -51,6 +51,9 @@ The whole loop works without a mouse or keyboard:
 3. **Come back after playing.** When a game closes, Faugus X returns to the front, full-screen, with the game you just played selected. (On KDE Plasma it asks KWin to raise the window, so it works even if Faugus X was minimized.)
 4. **Switch off from the power menu.** The power button in the top bar opens **Sleep, Restart, Shut down, Log out and Exit Faugus X**. Restart, Shut down and Log out ask for a second press (“Press again to shut down”), so a stray button can't switch the PC off. They go through your desktop (KDE Plasma, GNOME) so apps close normally; without one (for example in gamescope) Faugus X asks systemd directly.
 
+### Artwork for new games
+When you add a game, Faugus fills in its cover, banner and icon from SteamGridDB as you type the title. If you press **OK** while they are still downloading, Faugus X waits for them (the button shows **Getting artwork…**) instead of saving a game with a blank card. It never waits more than 20 seconds, and Cancel still works. The logo and HD banner follow right after the game appears.
+
 ### Download missing artwork
 **Settings → Interface**, under the SteamGridDB API key: **Download missing artwork** goes through every game and fills the gaps: banners, HD banners and logos. It never replaces artwork you already have or picked yourself.
 
@@ -155,6 +158,7 @@ faugus/hd_banners.py       HD banner matching
 faugus/logos.py            logo downloads and cache
 faugus/logo_editor.py      Logo slot and picker in the edit window
 faugus/artwork_refresh.py  "Download missing artwork"
+faugus/artwork_wait.py     wait for artwork downloads when adding a game
 faugus/xbridge.py          launch status from the runner to the launch screen
 faugus/x_setup.py          first-run defaults and the SteamGridDB requirement
 faugus/power_menu.py       power menu (sleep, restart, shut down, log out)

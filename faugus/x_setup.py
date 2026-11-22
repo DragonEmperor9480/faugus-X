@@ -76,10 +76,19 @@ _gate = None
 def require_steamgriddb(app, win):
     """Show the SteamGridDB window if Faugus X can't work without it."""
     _watch_settings(app, win)
+    _install_window_hooks(win)
     start_background_services()
     if has_steamgriddb() or _gate is not None or win is None:
         return
     _Gate(app, win)
+
+
+def _install_window_hooks(win):
+    """Faugus X additions to Faugus' own windows (no changes to launcher.py)."""
+    if win is None:
+        return
+    from faugus.artwork_wait import install as install_artwork_wait
+    install_artwork_wait(type(win).on_button_edit_clicked.__globals__.get("AddGame"))
 
 
 def _watch_settings(app, win):
