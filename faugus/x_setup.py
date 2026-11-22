@@ -168,16 +168,23 @@ def _add_tilt_option(settings, win):
     check.set_tooltip_text(_("For controllers with motion sensors (DualShock 4, DualSense, Switch Pro). "
                              "Xbox controllers have none."))
     check.set_active(tilt.is_enabled())
+    holo = Gtk.CheckButton(label=_("Holographic cover: the selected cover leans and shines"))
+    holo.set_margin_start(24)
+    holo.set_active(tilt.holo_enabled())
     hint = Gtk.Label(xalign=0, wrap=True, max_width_chars=50)
     hint.add_css_class("dim-label")
     hint.set_label(_("Your controller's motion sensors can't be read yet. "
                      "Install the udev rule from the Faugus X README, then reconnect the controller."))
     grid.attach(check, 0, 3, 1, 1)
-    grid.attach(hint, 0, 4, 1, 1)
+    grid.attach(holo, 0, 4, 1, 1)
+    grid.attach(hint, 0, 5, 1, 1)
     settings.checkbox_tilt = check
+    settings.checkbox_tilt_holo = holo
 
     def sync(*_a):
-        check.set_sensitive(combo.get_active_id() == "Showcase")
+        showcase_mode = combo.get_active_id() == "Showcase"
+        check.set_sensitive(showcase_mode)
+        holo.set_sensitive(showcase_mode and check.get_active())
         readable, unreadable = tilt.motion_devices()
         hint.set_visible(check.get_active() and not readable and bool(unreadable))
 
@@ -191,10 +198,11 @@ def _add_tilt_option(settings, win):
         enabled = check.get_active()
         cfg = ConfigManager()
         cfg.config[tilt.CONFIG_KEY] = str(enabled)
+        cfg.config[tilt.HOLO_KEY] = str(holo.get_active())
         cfg.save_config()
         live = getattr(win, "showcase", None)
         if live is not None:
-            live.set_tilt(enabled)
+            live.set_tilt(enabled, holo.get_active())
 
     settings.connect("response", on_response)
 

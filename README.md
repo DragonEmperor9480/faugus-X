@@ -26,7 +26,7 @@ A new **Showcase** interface mode, next to Faugus' List, Grid, Covers and Carrou
 - **HD banners:** Faugus stores banners at 1920×620, which looks soft when stretched to a full screen. Faugus X downloads the full-resolution (3840×1240) copy of *the same banner* from SteamGridDB, matched by comparing images, so your chosen banner is respected.
 
 ### Tilt effect
-With a controller that has motion sensors (DualShock 4, DualSense, Switch Pro and compatible), tilting it gives the home screen a sense of depth: the backdrop moves one way and the game's logo slightly the other, while the carousel stays put. It follows how you *tilt* the controller, not how you hold it, so it settles back to the middle when you stop moving. Turn it on in **Settings → Interface → Tilt effect**. It only reads the sensors while Faugus X is the focused window, never during a game. Xbox controllers have no motion sensors.
+With a controller that has motion sensors (DualShock 4, DualSense, Switch Pro and compatible), tilting it gives the home screen a sense of depth: the backdrop moves one way and the game's logo slightly the other, while the carousel stays put. The selected cover leans with the controller and a soft, holographic band of light slides across it, like tilting a shiny trading card. It follows how you *tilt* the controller, not how you hold it, so it settles back to the middle when you stop moving. Turn it on in **Settings → Interface → Tilt effect**; the holographic cover can be turned off on its own with the option below it. It only reads the sensors while Faugus X is the focused window, never during a game. Xbox controllers have no motion sensors.
 
 Linux only lets root read a controller's motion sensors by default, so the tilt effect needs a small udev rule (see [Controller motion sensors](#controller-motion-sensors)).
 
@@ -176,6 +176,7 @@ faugus/xbridge.py          launch status from the runner to the launch screen
 faugus/x_setup.py          first-run defaults and the SteamGridDB requirement
 faugus/power_menu.py       power menu (sleep, restart, shut down, log out)
 faugus/tilt.py             controller tilt for the parallax effect
+faugus/holo.py             holographic lean and shine on the selected cover
 faugus/controller_watch.py open Faugus X when a controller connects
 packaging/faugus-x/        installer, PKGBUILD and the motion sensor udev rule
 ```

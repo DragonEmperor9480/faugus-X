@@ -43,9 +43,18 @@ RESCAN_SECONDS = 3.0
 CONFIG_KEY = "showcase-tilt"
 
 
+HOLO_KEY = "showcase-tilt-holo"
+
+
 def is_enabled():
     from faugus.config_manager import ConfigManager
     return ConfigManager().config.get(CONFIG_KEY, "False") == "True"
+
+
+def holo_enabled():
+    """The holographic cover (part of the tilt effect). On by default."""
+    from faugus.config_manager import ConfigManager
+    return ConfigManager().config.get(HOLO_KEY, "True") != "False"
 # Linux gamepad motion axes: X to the right, Y out of the face buttons, Z
 # towards the player. Lying flat, gravity reads as +Y.
 

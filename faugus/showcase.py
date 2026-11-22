@@ -608,12 +608,17 @@ class Showcase:
         from faugus import tilt
         self._tilt = None
         self._tilt_tick = None
+        self._holo = None
         self._tilt_enabled = tilt.is_enabled()
+        self._holo_enabled = tilt.holo_enabled()
         self.win.connect("notify::is-active", lambda *_a: self._sync_tilt())
         self._sync_tilt()
 
-    def set_tilt(self, enabled):
+    def set_tilt(self, enabled, holo=True):
         self._tilt_enabled = enabled
+        self._holo_enabled = holo
+        if not holo and self._holo is not None:
+            self._holo.reset()
         self._sync_tilt()
 
     def _sync_tilt(self):
@@ -623,6 +628,9 @@ class Showcase:
                 from faugus.tilt import Tilt
                 self._tilt = Tilt()
             self._tilt.set_active(True)
+            if self._holo is None and getattr(self.win, "carrousel_slots", None):
+                from faugus.holo import Holo
+                self._holo = Holo(self.win)
             if self._tilt_tick is None:
                 self._tilt_tick = self.root.add_tick_callback(self._on_tilt_tick)
         elif self._tilt is not None:
@@ -635,9 +643,13 @@ class Showcase:
         # downhill, the near layer moves towards the lowered edge.
         self.backdrop.tilt_px = (-x * width * BACKDROP_TILT_X, y * height * BACKDROP_TILT_Y)
         self.hero_shift.set_offset(x * HERO_TILT_X_PX, -y * HERO_TILT_Y_PX)
+        if self._holo is not None and self._holo_enabled:
+            self._holo.update(x, y)        # the focused cover leans and shines
         if not self._tilt.active() and abs(x) < 0.002 and abs(y) < 0.002:
             self.backdrop.tilt_px = (0.0, 0.0)
             self.hero_shift.set_offset(0, 0)
+            if self._holo is not None:
+                self._holo.reset()
             self._tilt_tick = None
             return GLib.SOURCE_REMOVE
         return GLib.SOURCE_CONTINUE
