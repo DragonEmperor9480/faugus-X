@@ -15,9 +15,16 @@ conflicts=('faugus-x')
 source=("faugus-x::git+https://github.com/DragonEmperor9480/faugus-X.git#branch=faugus-x")
 sha256sums=('SKIP')
 
+# Version from Faugus X release tags (x1.0.0 -> 1.0.0.r<commits since>.g<hash>).
+# Faugus' own tags (e.g. 2.5.9) are ignored. Before the first x tag:
+# r<commit count>.<hash>.
 pkgver() {
     cd faugus-x
-    printf "r%s.%s" "$(git rev-list --count HEAD)" "$(git rev-parse --short HEAD)"
+    if git describe --long --tags --match 'x[0-9]*' >/dev/null 2>&1; then
+        git describe --long --tags --match 'x[0-9]*' | sed 's/^x//;s/\([^-]*-g\)/r\1/;s/-/./g'
+    else
+        printf "r%s.%s" "$(git rev-list --count HEAD)" "$(git rev-parse --short HEAD)"
+    fi
 }
 
 package() {
