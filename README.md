@@ -55,7 +55,7 @@ The whole loop works without a mouse or keyboard:
 When you add a game, Faugus fills in its cover, banner and icon from SteamGridDB as you type the title. If you press **OK** while they are still downloading, Faugus X waits for them (the button shows **Getting artwork…**) instead of saving a game with a blank card. It never waits more than 20 seconds, and Cancel still works. The logo and HD banner follow right after the game appears.
 
 ### Download missing artwork
-**Settings → Interface**, under the SteamGridDB API key: **Download missing artwork** goes through every game and fills the gaps: banners, HD banners and logos. It never replaces artwork you already have or picked yourself.
+**Settings → Interface**, under the SteamGridDB API key: **Download missing artwork** goes through every game and fills the gaps: covers, banners, HD banners and logos. It never replaces artwork you already have or picked yourself.
 
 ### Smooth on modest hardware
 Artwork is decoded in the background, the backdrop is drawn without per-frame restyling, and heavy work waits until carousel slides finish. Tested at 60 fps on Intel UHD 630 integrated graphics.

@@ -806,8 +806,10 @@ class Showcase:
         self.refresh_library()
         self.on_artwork_refreshed()
 
-    def on_artwork_refreshed(self):
-        """New banners/logos were downloaded: show them for the current game."""
+    def on_artwork_refreshed(self, covers=0):
+        """New artwork was downloaded: show it (reload the library for new covers)."""
+        if covers:
+            self.win.load_games()
         game = self.win.selected()
         if game is None:
             return

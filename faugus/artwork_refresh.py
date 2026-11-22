@@ -1,7 +1,8 @@
 """Faugus X: "Download missing artwork" in Settings.
 
 Walks every game in the library and fills the gaps, never overwriting
-anything that already exists (so banners/logos the user picked are safe):
+anything that already exists (so covers/banners/logos the user picked are safe):
+- a cover, if the game has none (same SteamGridDB pick Faugus makes)
 - a banner, if the game has none (same SteamGridDB pick Faugus makes)
 - the full-resolution HD copy of the banner, for the Showcase backdrop
 - a logo, unless the user chose "Use game title instead"
@@ -19,7 +20,7 @@ import threading
 from gi.repository import GLib, Gtk
 
 from faugus import hd_banners, logos
-from faugus.path_manager import BANNERS_DIR
+from faugus.path_manager import BANNERS_DIR, COVERS_DIR, GAMES_JSON
 
 
 class _Job:
@@ -59,7 +60,7 @@ def start(games, on_finished=None):
     games = list(games)
 
     def work():
-        counts = {"banners": 0, "hd": 0, "logos": 0}
+        counts = {"covers": 0, "banners": 0, "hd": 0, "logos": 0}
         try:
             for index, game in enumerate(games):
                 if JOB.cancel.is_set():
@@ -73,7 +74,8 @@ def start(games, on_finished=None):
                 done=len(games), total=len(games), counts=dict(counts),
             )
             if on_finished is not None:
-                GLib.idle_add(lambda: (on_finished(), False)[1])
+                covers = counts["covers"]
+                GLib.idle_add(lambda: (on_finished(covers=covers), False)[1])
 
     threading.Thread(target=work, name="faugus-x-artwork-refresh", daemon=True).start()
 
@@ -81,6 +83,11 @@ def start(games, on_finished=None):
 def _fill_game(game, api_key, counts):
     gameid = game.gameid
     banner = f"{BANNERS_DIR}/{gameid}.png"
+
+    cover = str(getattr(game, "cover", "") or "")
+    if not (cover and os.path.isfile(os.path.expanduser(cover))):
+        if _download_cover(game, api_key):
+            counts["covers"] += 1
 
     if not os.path.isfile(banner):
         if _download_banner(game, api_key, banner):
@@ -104,8 +111,11 @@ def _fill_game(game, api_key, counts):
             print(f"Faugus X: logo for {game.title}: {error}")
 
 
-def _download_banner(game, api_key, dest):
-    """The same pick Faugus makes when adding a game: SteamGridDB's first hero."""
+def _download_first(game, api_key, kind, dest, size):
+    """The same pick Faugus makes when adding a game: SteamGridDB's first result.
+
+    kind is "grids" (600x900 covers) or "heroes" (banners).
+    """
     import requests
     from faugus.core import fetch_steamgriddb_candidates, get_steamgriddb_session
     from faugus.utils import resize_image_file, verified_content
@@ -116,26 +126,57 @@ def _download_banner(game, api_key, dest):
         candidates = fetch_steamgriddb_candidates(
             api_key, game.title, limit=1, game_id=sgdb_id, steam_appid=steam_appid
         )
-        heroes = candidates.get("heroes") or []
-        if not heroes:
+        found = candidates.get(kind) or []
+        if not found:
             return False
-        content = verified_content(get_steamgriddb_session().get(heroes[0]["url"], timeout=20))
+        content = verified_content(get_steamgriddb_session().get(found[0]["url"], timeout=20))
     except requests.RequestException as error:
-        print(f"Faugus X: banner for {game.title}: {error}")
+        print(f"Faugus X: {kind} for {game.title}: {error}")
         return False
 
-    fd, tmp = tempfile.mkstemp(suffix=".img", prefix="faugus-x-banner-")
+    fd, tmp = tempfile.mkstemp(suffix=".img", prefix="faugus-x-art-")
     try:
         with os.fdopen(fd, "wb") as f:
             f.write(content)
-        os.makedirs(BANNERS_DIR, exist_ok=True)
-        resize_image_file(tmp, dest, 1920, 620)
+        os.makedirs(os.path.dirname(dest), exist_ok=True)
+        resize_image_file(tmp, dest, *size)
         return os.path.isfile(dest)
     except Exception as error:
-        print(f"Faugus X: saving banner for {game.title}: {error}")
+        print(f"Faugus X: saving {kind} for {game.title}: {error}")
         return False
     finally:
         _forget(tmp)
+
+
+def _download_banner(game, api_key, dest):
+    return _download_first(game, api_key, "heroes", dest, (1920, 620))
+
+
+def _download_cover(game, api_key):
+    """Save like Faugus does (covers/<gameid>.png, 460x690) and record it in games.json."""
+    dest = f"{COVERS_DIR}/{game.gameid}.png"
+    if not _download_first(game, api_key, "grids", dest, (460, 690)):
+        return False
+    done = threading.Event()
+
+    def record():
+        # On the main loop, like Faugus' own writes to games.json.
+        from faugus.core import load_json_file, save_json_file
+        try:
+            games = load_json_file(GAMES_JSON, [])
+            for entry in games:
+                if isinstance(entry, dict) and entry.get("gameid") == game.gameid:
+                    entry["cover"] = dest
+                    break
+            save_json_file(games, GAMES_JSON)
+            game.cover = dest
+        finally:
+            done.set()
+        return False
+
+    GLib.idle_add(record)
+    done.wait(10)
+    return True
 
 
 def _forget(path):
@@ -182,7 +223,7 @@ class _SettingsRow:
 
         self.button = Gtk.Button(label=_("Download missing artwork"))
         self.button.set_tooltip_text(_(
-            "Fetches banners, HD banners and logos for every game that is missing them. "
+            "Fetches covers, banners, HD banners and logos for every game that is missing them. "
             "Artwork you already have or picked yourself is never replaced."
         ))
         self.button.connect("clicked", self._on_clicked)
@@ -222,8 +263,9 @@ class _SettingsRow:
             self.status.set_visible(True)
             return
         counts = state.get("counts", {})
-        summary = _("{banners} banners, {hd} HD banners, {logos} logos added").format(
-            banners=counts.get("banners", 0), hd=counts.get("hd", 0), logos=counts.get("logos", 0)
+        summary = _("{covers} covers, {banners} banners, {hd} HD banners, {logos} logos added").format(
+            covers=counts.get("covers", 0), banners=counts.get("banners", 0),
+            hd=counts.get("hd", 0), logos=counts.get("logos", 0)
         )
         total = max(1, state.get("total", 1))
         if phase == "running":
